@@ -25,10 +25,10 @@ class MPERunner(Runner):
 
             for step in range(self.episode_length):
                 # Sample actions
-                values, actions, action_log_probs, rnn_states, rnn_states_critic, actions_env = self.collect(step)
+                values, actions, action_log_probs, rnn_states, rnn_states_critic = self.collect(step)
                     
                 # Obser reward and next obs
-                obs, rewards, dones, infos = self.envs.step(actions_env)
+                obs, rewards, dones, infos = self.envs.step(actions)
 
                 data = obs, rewards, dones, infos, values, actions, action_log_probs, rnn_states, rnn_states_critic
 
@@ -59,7 +59,7 @@ class MPERunner(Runner):
                                 self.num_env_steps,
                                 int(total_num_steps / (end - start))))
 
-                if self.env_name == "MPE":
+                if self.env_name == "IA":
                     env_infos = {}
                     for agent_id in range(self.num_agents):
                         idv_rews = []
@@ -108,19 +108,19 @@ class MPERunner(Runner):
         rnn_states = np.array(np.split(_t2n(rnn_states), self.n_rollout_threads))
         rnn_states_critic = np.array(np.split(_t2n(rnn_states_critic), self.n_rollout_threads))
         # rearrange action
-        if self.envs.action_space[0].__class__.__name__ == 'MultiDiscrete':
-            for i in range(self.envs.action_space[0].shape):
-                uc_actions_env = np.eye(self.envs.action_space[0].high[i] + 1)[actions[:, :, i]]
-                if i == 0:
-                    actions_env = uc_actions_env
-                else:
-                    actions_env = np.concatenate((actions_env, uc_actions_env), axis=2)
-        elif self.envs.action_space[0].__class__.__name__ == 'Discrete':
-            actions_env = np.squeeze(np.eye(self.envs.action_space[0].n)[actions], 2)
-        else:
-            raise NotImplementedError
+        # if self.envs.action_space[0].__class__.__name__ == 'MultiDiscrete':
+        #     for i in range(self.envs.action_space[0].shape):
+        #         uc_actions_env = np.eye(self.envs.action_space[0].high[i] + 1)[actions[:, :, i]]
+        #         if i == 0:
+        #             actions_env = uc_actions_env
+        #         else:
+        #             actions_env = np.concatenate((actions_env, uc_actions_env), axis=2)
+        # elif self.envs.action_space[0].__class__.__name__ == 'Discrete':
+        #     actions_env = np.squeeze(np.eye(self.envs.action_space[0].n)[actions], 2)
+        # else:
+        #     raise NotImplementedError
 
-        return values, actions, action_log_probs, rnn_states, rnn_states_critic, actions_env
+        return values, actions, action_log_probs, rnn_states, rnn_states_critic
 
     def insert(self, data):
         obs, rewards, dones, infos, values, actions, action_log_probs, rnn_states, rnn_states_critic = data
