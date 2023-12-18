@@ -33,7 +33,7 @@ class Scenario(BaseScenario):
 
     def reward(self, trans):
         # Harvesters should try to move as short as they can
-        rew = - 0.001 * np.linalg.norm(trans.vel)
+        rew = - 0.0001 * np.linalg.norm(trans.vel)
         return rew
 
     def observation(self, trans, world):

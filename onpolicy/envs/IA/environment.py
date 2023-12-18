@@ -29,6 +29,7 @@ class IAMultiAgentEnv(gym.Env):
         self.observation_callback = observation_callback
         self.info_callback = info_callback
         self.done_callback = done_callback
+        self.max_step = 10000
 
         self.post_step_callback = post_step_callback
 
@@ -109,6 +110,9 @@ class IAMultiAgentEnv(gym.Env):
         if self.post_step_callback is not None:
             self.post_step_callback(self.world)
 
+        if self.current_step >= self.max_step:
+            done_n = [True] * self.n 
+
         return obs_n, reward_n, done_n, info_n
 
     def reset(self):
@@ -123,7 +127,7 @@ class IAMultiAgentEnv(gym.Env):
 
         for agent in self.agents:
             obs_n.append(self._get_obs(agent))
-
+        # print("env reset")
         return obs_n
 
     # get info used for benchmarking
