@@ -20,7 +20,6 @@ class IAMultiAgentEnv(gym.Env):
         self.world = world
         self.world_length = self.world.episode_length
         self.current_step = 0
-        self.agents = self.world.transporters
         # set required vectorized gym env property
         self.n = self.world.num_transporter
         # scenario callbacks
@@ -29,7 +28,7 @@ class IAMultiAgentEnv(gym.Env):
         self.observation_callback = observation_callback
         self.info_callback = info_callback
         self.done_callback = done_callback
-        self.max_step = 10000
+        self.max_step = 1000
 
         self.post_step_callback = post_step_callback
 
@@ -45,7 +44,7 @@ class IAMultiAgentEnv(gym.Env):
         self.observation_space = []
         self.share_observation_space = []
         share_obs_dim = 0
-        for agent in self.agents:
+        for agent in self.world.transporters:
             self.action_space.append(spaces.Box(
                 low=-np.inf, high=+np.inf, shape=(2,), dtype=np.float32))  # [-inf,inf]
 
@@ -78,15 +77,14 @@ class IAMultiAgentEnv(gym.Env):
         reward_n = []
         done_n = []
         info_n = []
-        self.agents = self.world.transporters
         # set action for each agent
         # action_n:a list, contains num_agent elements,each element is a (single_action_dim,)shape array. 
-        for i, agent in enumerate(self.agents):
+        for i, agent in enumerate(self.world.transporters):
             self._set_action(action_n[i], agent)
         # advance world state
         self.world.step()  # core.step()
         # record observation for each agent
-        for i, agent in enumerate(self.agents):
+        for i, agent in enumerate(self.world.transporters):
             obs_n.append(self._get_obs(agent))
             reward_n.append([self._get_reward(agent)])
             done_n.append(self._get_done(agent))
@@ -123,9 +121,8 @@ class IAMultiAgentEnv(gym.Env):
         self._reset_render()
         # record observations for each agent
         obs_n = []
-        self.agents = self.world.transporters
 
-        for agent in self.agents:
+        for agent in self.world.transporters:
             obs_n.append(self._get_obs(agent))
         # print("env reset")
         return obs_n
@@ -156,20 +153,20 @@ class IAMultiAgentEnv(gym.Env):
     def _get_reward(self, agent):
         if self.reward_callback is None:
             return 0.0
-        return self.reward_callback(agent)
+        return self.reward_callback(agent, self.world)
 
     # get global reward of the harvesters
     def _get_global_reward(self):
         glo_rew = 0
-        for harv in self.world.harvesters:
-            if harv.full:
-                glo_rew -= 2
-            if harv.transporting:
-                glo_rew += 5
-            if harv.complete_task:
-                glo_rew += 10
-            if harv.moving:
-                glo_rew += 0.1
+        # for harv in self.world.harvesters:
+        #     if harv.full:
+        #         glo_rew -= 10
+        #     if harv.transporting:
+        #         glo_rew += 3
+        #     if harv.complete_task:
+        #         glo_rew += 100
+        #     if harv.moving:
+        #         glo_rew += 2
         return glo_rew
 
     # set env action for a particular agent

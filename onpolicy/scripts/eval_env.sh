@@ -11,7 +11,7 @@ echo "env is ${env}, scenario is ${scenario}, algo is ${algo}, exp is ${exp}, ma
 for seed in `seq ${seed_max}`;
 do
     echo "seed is ${seed}:"
-    CUDA_VISIBLE_DEVICES=0 python train/train_ia.py --env_name ${env} --algorithm_name ${algo} --experiment_name ${exp} \
+    CUDA_VISIBLE_DEVICES=0 python ./onpolicy/scripts/train/eval_ia.py --env_name ${env} --algorithm_name ${algo} --experiment_name ${exp} \
     --scenario_name ${scenario} --num_harvester ${num_harvester} --num_transporter ${num_transporter} --seed ${seed} \
     --n_rollout_threads 128 --episode_length 500 --num_env_steps 200000000 \
     --ppo_epoch 10 --use_wandb --hidden_size 1024 --layer_N 2 --entropy_coef 0.02\
