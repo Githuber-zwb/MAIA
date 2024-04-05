@@ -6,8 +6,7 @@ from onpolicy.envs.IA.scenario import BaseScenario
 
 class Scenario(BaseScenario):
     def make_world(self, args):
-        field = Field(args)
-        world = World(args, field)
+        world = World(args)
         self.reset_world(world)
         return world
 
