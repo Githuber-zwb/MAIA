@@ -3,6 +3,7 @@ from gym import spaces
 from gym.envs.registration import EnvSpec
 import numpy as np
 from .multi_discrete import MultiDiscrete
+from onpolicy.envs.IA.ia_core import World, Harvester, Transporter, Field
 
 # update bounds to center around agent
 cam_range = 2
@@ -28,7 +29,8 @@ class IAMultiAgentEnv(gym.Env):
         self.observation_callback = observation_callback
         self.info_callback = info_callback
         self.done_callback = done_callback
-        self.max_step = 1000
+        self.decision_dt = 3.0
+        self.max_step = 200000
 
         self.post_step_callback = post_step_callback
 
@@ -71,30 +73,63 @@ class IAMultiAgentEnv(gym.Env):
             np.random.seed(seed)
 
     # step  this is  env.step()
-    def step(self, action_n):
-        self.current_step += 1
-        obs_n = []
-        reward_n = []
-        done_n = []
-        info_n = []
+    def step(self, action_n, img_list = None, no_trans_mode = False, auto_trans_mode = False):
         # set action for each agent
         # action_n:a list, contains num_agent elements,each element is a (single_action_dim,)shape array. 
         for i, agent in enumerate(self.world.transporters):
             self._set_action(action_n[i], agent)
         # advance world state
-        self.world.step()  # core.step()
-        # record observation for each agent
-        for i, agent in enumerate(self.world.transporters):
-            obs_n.append(self._get_obs(agent))
-            reward_n.append([self._get_reward(agent)])
-            done_n.append(self._get_done(agent))
-            info = {}
-            # info = {'individual_reward': self._get_reward(agent)}
-            env_info = self._get_info(agent)
-            if 'fail' in env_info.keys():
-                info['fail'] = env_info['fail']
-            info_n.append(info)
-        global_reward = self._get_global_reward()
+        for _ in range(int(self.decision_dt / self.world.dt)):
+            self.current_step += 1
+            obs_n = []
+            reward_n = []
+            done_n = []
+            info_n = []
+            self.world.step()  # core.step()
+            # img = self.render("rgb_array")[0]
+            # img_list.append(img)
+            # record observation for each agent
+            for i, agent in enumerate(self.world.transporters):
+                obs_n.append(self._get_obs(agent))
+                reward_n.append([self._get_reward(agent)])
+                done_n.append(self._get_done(agent))
+                info = {}
+                # info = {'individual_reward': self._get_reward(agent)}
+                env_info = self._get_info(agent)
+                if 'fail' in env_info.keys():
+                    info['fail'] = env_info['fail']
+                info_n.append(info)
+          
+            # print("harv0 load left:", obs_n[0][21])
+            # print("harv1 load left:", obs_n[0][31])
+            # print("harv2 load left:", obs_n[0][41])
+            # print(self.world.harvesters[0].load)
+            if no_trans_mode:
+                for i in range(self.world.num_harvester):
+                    if self.world.harvesters[i].load_percent == 1.0:
+                        print(f"harv{i} full at ", self.current_step * self.world.dt, " s. ")
+                        print(f"harv{i} pos: ", self.world.harvesters[i].pos)
+                        print("*"*10)
+                        self.world.harvesters[i].load = 0.0
+                        self.world.harvesters[i].load_percent = 0.0
+
+            elif auto_trans_mode:
+                for i in range(self.world.num_transporter):
+                    if self.world.transporters[i].load_percent == 1.0:
+                        self.world.transporters[i].set_action(1)
+                for i in range(self.world.num_harvester):
+                    if self.world.harvesters[i].load_percent == 1.0:
+                        if not self.world.harvesters[i].chosen:
+                            pos_harv = self.world.harvesters[0].pos
+                            dis_list = []
+                            for j in range(self.world.num_transporter):
+                                dis_list.append(np.linalg.norm(pos_harv - self.world.transporters[j].pos))
+                            idx = np.argsort(dis_list)
+                            for k in idx:
+                                if not self.world.transporters[k].has_dispatch_task:
+                                    self.world.transporters[k].set_action(2, self.world.harvesters[i])
+                                    break
+            global_reward = self._get_global_reward()
 
         # all agents get total reward in cooperative case, if shared reward, all agents have the same reward, and reward is sum
         reward = np.sum(reward_n) + global_reward
@@ -110,6 +145,14 @@ class IAMultiAgentEnv(gym.Env):
 
         if self.current_step >= self.max_step:
             done_n = [True] * self.n 
+            print("Max episode step. ")
+
+        all_complete = True
+        for i in range(self.world.num_harvester):
+            all_complete = all_complete and self.world.harvesters[i].complete_traj
+        if all_complete:
+            done_n = [True] * self.n 
+            print("All complete task. ")
 
         return obs_n, reward_n, done_n, info_n
 
@@ -171,7 +214,8 @@ class IAMultiAgentEnv(gym.Env):
 
     # set env action for a particular agent
     def _set_action(self, action, agent, time=None):
-        agent.vel = action
+        return
+        agent.set_action(action)
 
     # reset rendering assets
     def _reset_render(self):
@@ -194,8 +238,10 @@ class IAMultiAgentEnv(gym.Env):
                 # import rendering only if we need it (and don't import for headless machines)
                 #from gym.envs.classic_control import rendering
                 from . import rendering
-                self.viewers[i] = rendering.Viewer(600, 800)
-                self.viewers[i].set_bounds(-300, 300, -100, 700)
+                # self.viewers[i] = rendering.Viewer(600, 800)
+                # self.viewers[i].set_bounds(-300, 300, -100, 700)
+                self.viewers[i] = rendering.Viewer(150, 350)
+                self.viewers[i].set_bounds(-10, 140 , -10, 340)
 
         # create rendering geometry
         if self.render_geoms is None:
@@ -206,7 +252,7 @@ class IAMultiAgentEnv(gym.Env):
             self.render_geoms_xform = []
 
             for entity in self.world.harvesters:
-                geom = rendering.make_circle(7, 30)
+                geom = rendering.make_circle(3, 60)
                 xform = rendering.Transform()
                 geom.set_color(*entity.color, alpha=1)
                 geom.add_attr(xform)
@@ -229,7 +275,7 @@ class IAMultiAgentEnv(gym.Env):
             self.render_geoms.append(field)
 
             # The depot
-            acircle = rendering.make_circle(10,30)
+            acircle = rendering.make_circle(5,60)
             trans = rendering.Transform(translation=self.world.field.depot)
             acircle.set_color(0, 0, 0)
             acircle.add_attr(trans)
@@ -239,14 +285,14 @@ class IAMultiAgentEnv(gym.Env):
             harv_area = rendering.make_polygon([(0, self.world.field.headland_width), (0, self.world.field.field_length - self.world.field.headland_width), (self.world.field.field_width, self.world.field.field_length - self.world.field.headland_width), (self.world.field.field_width, self.world.field.headland_width)], False)
             # harv_area.set_color(0.941, 1, 0.941)
             harv_area.set_color(0, 1, 0)
-            harv_area.set_linewidth(4)
+            harv_area.set_linewidth(2)
             self.render_geoms.append(harv_area)
 
             # The headland
             headland1 = rendering.make_polygon([(0, 0), (0, self.world.field.headland_width), (self.world.field.field_width, self.world.field.headland_width), (self.world.field.field_width, 0)], False)
             headland2 = rendering.make_polygon([(0, self.world.field.field_length - self.world.field.headland_width), (0, self.world.field.field_length), (self.world.field.field_width, self.world.field.field_length), (self.world.field.field_width, self.world.field.field_length - self.world.field.headland_width)], False)
             headland1.set_color(0.5, 0.164, 0.164)
-            headland1.set_linewidth(4)
+            headland1.set_linewidth(2)
             headland2.set_color(0.5, 0.164, 0.164)
             headland2.set_linewidth(4)
             self.render_geoms.append(headland1)
