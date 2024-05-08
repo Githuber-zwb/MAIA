@@ -177,6 +177,7 @@ class Transporter(object):
         self.transporting_speed = transporting_speed    # 需要和harvester的转运速度一致
         self.capacity = float(capacity) # 运粮车的容量要明显大于收割机
         self.speed = float(speed)
+        self.total_trip = 0.0
         self.pos_error = pos_error  # 认为收割机和运粮车相距多远即可开始转运。需要根据二者速度和dt计算：(s_1 + s_2) * dt / 2
         
         self.nav_points =[]
@@ -322,6 +323,7 @@ class Transporter(object):
             if len(self.nav_points) < 2:
                 return
             pred_new_pos = self.pos + self.dir * self.dt * self.speed
+            self.total_trip += self.dt * self.speed
             if (pred_new_pos - self.old_nav_point) @ (pred_new_pos - self.curr_nav_point) > 0:  # 不支持连续一个time step拐弯多次，要设置dt足够小。
                 left_dis = np.linalg.norm(pred_new_pos - self.curr_nav_point)
                 self.nav += 1
@@ -330,7 +332,7 @@ class Transporter(object):
                     print("Cannot find the harvester!!")
                     self.nav_points = []
                     self.searching_for_harv = False
-                    self.returning_to_headland = True
+                    # self.returning_to_headland = True
                     self.serving_harv.chosen = False
                     self.serving_harv = None
                     return
@@ -368,8 +370,10 @@ class Transporter(object):
                 self.serving_harv.chosen = False
                 self.serving_harv = None
             if len(self.nav_points) < 2:
+                self.returning_to_headland = False
                 return
             pred_new_pos = self.pos + self.dir * self.dt * self.speed
+            self.total_trip += self.dt * self.speed
             if (pred_new_pos - self.old_nav_point) @ (pred_new_pos - self.curr_nav_point) > 0:  # 不支持连续一个time step拐弯多次，要设置dt足够小。
                 left_dis = np.linalg.norm(pred_new_pos - self.curr_nav_point)
                 self.nav += 1
@@ -386,6 +390,7 @@ class Transporter(object):
             self.pos = pred_new_pos
         elif self.returning_to_depot:
             pred_new_pos = self.pos + self.dir * self.dt * self.speed
+            self.total_trip += self.dt * self.speed
             if (pred_new_pos - self.old_nav_point) @ (pred_new_pos - self.curr_nav_point) > 0:  # 不支持连续一个time step拐弯多次，要设置dt足够小。
                 left_dis = np.linalg.norm(pred_new_pos - self.curr_nav_point)
                 self.nav += 1

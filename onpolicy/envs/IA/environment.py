@@ -4,9 +4,16 @@ from gym.envs.registration import EnvSpec
 import numpy as np
 from .multi_discrete import MultiDiscrete
 from onpolicy.envs.IA.ia_core import World, Harvester, Transporter, Field
+import pyglet
 
 # update bounds to center around agent
 cam_range = 2
+
+class DrawText:
+    def __init__(self, label:pyglet.text.Label):
+        self.label=label
+    def render(self):
+        self.label.draw()
 
 class IAMultiAgentEnv(gym.Env):
     metadata = {
@@ -120,11 +127,13 @@ class IAMultiAgentEnv(gym.Env):
                 for i in range(self.world.num_harvester):
                     if self.world.harvesters[i].load_percent == 1.0:
                         if not self.world.harvesters[i].chosen:
-                            pos_harv = self.world.harvesters[0].pos
+                            pos_harv = self.world.harvesters[i].pos
                             dis_list = []
                             for j in range(self.world.num_transporter):
                                 dis_list.append(np.linalg.norm(pos_harv - self.world.transporters[j].pos))
+                            # print(dis_list)
                             idx = np.argsort(dis_list)
+                            # print(idx)
                             for k in idx:
                                 if not self.world.transporters[k].has_dispatch_task:
                                     self.world.transporters[k].set_action(2, self.world.harvesters[i])
@@ -153,6 +162,7 @@ class IAMultiAgentEnv(gym.Env):
         if all_complete:
             done_n = [True] * self.n 
             print("All complete task. ")
+            print("Total tims: ", self.current_step * self.world.dt)
 
         return obs_n, reward_n, done_n, info_n
 
@@ -240,8 +250,8 @@ class IAMultiAgentEnv(gym.Env):
                 from . import rendering
                 # self.viewers[i] = rendering.Viewer(600, 800)
                 # self.viewers[i].set_bounds(-300, 300, -100, 700)
-                self.viewers[i] = rendering.Viewer(150, 350)
-                self.viewers[i].set_bounds(-10, 140 , -10, 340)
+                self.viewers[i] = rendering.Viewer(300, 350)
+                self.viewers[i].set_bounds(-10, 290 , -10, 340)
 
         # create rendering geometry
         if self.render_geoms is None:
@@ -312,10 +322,25 @@ class IAMultiAgentEnv(gym.Env):
                 line.set_color(*harv.color)
                 self.render_geoms.append(line)
 
+            self.text_geoms = []
+            for h, harv in enumerate(self.world.harvesters):
+                label = pyglet.text.Label(f"Harvester {h}", font_size=8,
+                                x=110, y=300 - h * 20 , anchor_x='left', anchor_y='bottom',
+                                color=(0, 0, 0, 255))
+                label.draw()
+                self.text_geoms.append(DrawText(label))
+            for t, trans in enumerate(self.world.transporters):
+                label = pyglet.text.Label(f"Transporter {t}", font_size=8,
+                                x=110, y=300 - (h + 1) * 20 - t * 20 , anchor_x='left', anchor_y='bottom',
+                                color=(0, 0, 0, 255))
+                label.draw()
+                self.text_geoms.append(DrawText(label))
             # add geoms to viewer
             for viewer in self.viewers:
                 viewer.geoms = []
                 for geom in self.render_geoms:
+                    viewer.add_geom(geom)
+                for geom in self.text_geoms:
                     viewer.add_geom(geom)
 
         results = []
@@ -351,6 +376,12 @@ class IAMultiAgentEnv(gym.Env):
             for e, entity in enumerate(self.world.harvesters + self.world.transporters):
                 self.render_geoms_xform[e].set_translation(*entity.pos)
                 self.render_geoms[e].set_color(*entity.color)
+            for h, harv in enumerate(self.world.harvesters):
+                message = f'Harvester {h}: ' + '%.2f'%harv.load + '/' + str(harv.capacity)
+                self.text_geoms[h].label.text = message
+            for t, trans in enumerate(self.world.transporters):
+                message = f'Transporter {t} :' + str(trans.load) + '/' + str(trans.capacity)
+                self.text_geoms[h + 1 + t].label.text = message
 
             # # The cars 
             # for entity in self.world.harvesters + self.world.transporters:

@@ -88,32 +88,18 @@ if __name__ == "__main__":
         # print("harv1 load per:", obs[0][20])
         # print("harv1 load per:", obs[0][30])
         # print("harv1 load per:", obs[0][40])
-        print(env.world.transporters[0].pos)
-        print(env.world.transporters[1].pos)
+        # print(env.world.transporters[0].has_dispatch_task)
+        # print(env.world.harvesters[0].chosen)
         img = env.render("rgb_array")[0]
         image_list.append(img)
         if np.all(dones):
             break
-        # if i == 0:
-        #     imageio.imsave("env2.jpg", img)
-        # time.sleep(10)
-    imageio.mimsave('env_new3.mp4', image_list)
-    # world.harvesters[0].transporting = True
-    # for i in range(200):
-        # world.harvesters[0].update_state()
-        # print(i, world.harvesters[0].pos, "moving:", world.harvesters[0].moving, "\tfull:", world.harvesters[0].full, "\ttrasporting:", world.harvesters[0].transporting, "\tload:", world.harvesters[0].load, "\tin field: ",world.harvesters[0].in_harvest_field())
-    
+        # if i % 100 == 0:
+        #     imageio.imsave(f"env_auto_trans_mode{i}.jpg", img)
 
-    # world.transporters[0].vel = np.array([0.3,0.4])
-    # for _ in range(100):
-        # world.transporters[0].update_state()
-        # world.harvesters[0].update_state()
-        # ob = scenario.observation(world.transporters[0],world)
-        # rew = scenario.reward(world.transporters[0])
-        # print(i, ob, rew, scenario.done(world))
-        # scenario.observation(world.transporters[0],world)
-        # print(world.transporters[0].pos)
-
-    # for harv in world.harvesters:
-        # harv.complete_task = True
-    # print(scenario.done(world))
+    for h in range(all_args.num_harvester):
+        print(f"Harvester{h} total wait time: ", env.world.harvesters[h].total_wait_time)
+    for t in range(all_args.num_transporter):
+        print(f"Transporter{t} total trip: ", env.world.transporters[t].total_trip)
+    print(i)
+    # imageio.mimsave('render/env_auto_trans_mode_80_per.mp4', image_list)
