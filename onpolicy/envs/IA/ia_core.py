@@ -154,6 +154,7 @@ class Harvester(object):
 
         if self.complete_traj:
             self.able_to_trans = False
+            return
 
         if self.time - self.last_trans_time < 60:   # 两次转运的间隔大于60s
             self.able_to_trans = False

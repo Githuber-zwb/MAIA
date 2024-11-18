@@ -81,33 +81,7 @@ class IAMultiAgentEnv(gym.Env):
         # set action for each agent
         # action_n:a list, contains num_agent elements,each element is a (single_action_dim,)shape array. 
         self.current_step += 1
-        for i, agent in enumerate(self.world.transporters):
-            self._set_action(action_n[i], agent)
-        # advance world state
-        reward_n = [0.0 for _ in range(self.world.num_transporter)]
-        reward_global = 0.0
-        for _ in range(int(self.decision_dt / self.world.dt)):
-            self.world.step()  # core.step()
-            for i, agent in enumerate(self.world.transporters):
-                new_trip_len, new_trans_times = self._get_reward(agent)
-                reward_n[i] += (self.distance_factor * new_trip_len + self.trans_times_factor * new_trans_times)
-            for harv in self.world.harvesters:
-                reward_global -= self.wait_time_factor * harv.new_wait_time
 
-        obs_n = []
-        done_n = []
-        info_n = []
-
-        for i, agent in enumerate(self.world.transporters):
-            obs_n.append(self._get_obs(agent))
-            done_n.append(self._get_done(agent))
-            info = {}
-            # info = {'individual_reward': self._get_reward(agent)}
-            env_info = self._get_info(agent)
-            if 'fail' in env_info.keys():
-                info['fail'] = env_info['fail']
-            info_n.append(info)
-        
         if no_trans_mode:
             for i in range(self.world.num_harvester):
                 if self.world.harvesters[i].load_percent == 1.0:
@@ -136,6 +110,36 @@ class IAMultiAgentEnv(gym.Env):
                             if not self.world.transporters[k].has_dispatch_task:
                                 self.world.transporters[k].set_action(2, self.world.harvesters[i])
                                 break
+
+        else:
+            for i, agent in enumerate(self.world.transporters):
+                self._set_action(action_n[i], agent)
+        # advance world state
+        reward_n = [0.0 for _ in range(self.world.num_transporter)]
+        reward_global = 0.0
+        for _ in range(int(self.decision_dt / self.world.dt)):
+            self.world.step()  # core.step()
+            for i, agent in enumerate(self.world.transporters):
+                new_trip_len, new_trans_times = self._get_reward(agent)
+                reward_n[i] += (self.distance_factor * new_trip_len + self.trans_times_factor * new_trans_times)
+            for harv in self.world.harvesters:
+                reward_global -= self.wait_time_factor * harv.new_wait_time
+
+        obs_n = []
+        done_n = []
+        info_n = []
+
+        for i, agent in enumerate(self.world.transporters):
+            obs_n.append(self._get_obs(agent))
+            done_n.append(self._get_done(agent))
+            info = {}
+            # info = {'individual_reward': self._get_reward(agent)}
+            env_info = self._get_info(agent)
+            if 'fail' in env_info.keys():
+                info['fail'] = env_info['fail']
+            info_n.append(info)
+        
+
             # global_reward = self._get_global_reward()
 
         # all agents get total reward in cooperative case, if shared reward, all agents have the same reward, and reward is sum

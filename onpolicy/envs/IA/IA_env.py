@@ -35,7 +35,7 @@ if __name__ == "__main__":
     import numpy as np
     import time
 
-    np.random.seed(7)
+    # np.random.seed(7)
     parser = argparse.ArgumentParser(
         description='ia', formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--scenario_name', type=str,
@@ -71,6 +71,7 @@ if __name__ == "__main__":
     # env.world.harvesters[1].capacity = 2000
 
     image_list = []
+    reward_ls = []
     for episode in range(1):
         env.reset()
         for i in range(len(env.world.harvesters)):
@@ -79,15 +80,18 @@ if __name__ == "__main__":
         for i in range(len(env.world.transporters)):
             print(f"Trans {i} speed and cap: ", env.world.transporters[i].speed, env.world.transporters[i].capacity)
             
-        for i in range(5000):
-            print("step: ", i, ", environment step: ", env.world.world_step)
+        rewards_total = []
+        for i in range(1000):
+            # print("step: ", i, ", environment step: ", env.world.world_step)
+            # print(env.world.transporters[0].trans_times)
             # print(env.world.harvesters[0].new_wait_time)
             # print(env.world.harvesters[1].new_wait_time)
             # print("trans length: ", env.world.transporters[0].new_trip_len)
 
             # auto trans mode
             actions = np.zeros([env.world.num_transporter, 1])
-            obs, rews,dones,infos = env.step(actions, auto_trans_mode=True, decPt=1.0)
+            obs, rews,dones,infos = env.step(actions, auto_trans_mode=True, decPt=0.6)
+            rewards_total.append(rews)
             # print("Rewards: ", rews)
             # print("done: ", dones)
             # print("step:", env.current_step, "\n")
@@ -101,14 +105,19 @@ if __name__ == "__main__":
             # print("done: ", dones)
             # print(obs)
 
-            img = env.render("rgb_array")[0]
-            image_list.append(img)
+            # img = env.render("rgb_array")[0]
+            # image_list.append(img)
             if np.all(dones):
                 break
             # if i % 100 == 0:
             #     imageio.imsave(f"env_auto_trans_mode{i}.jpg", img)
+        rewards_total = np.sum(np.array(rewards_total), axis=0)
+        print(rewards_total)
+        reward_ls.append(np.mean(rewards_total))
         for h in range(all_args.num_harvester):
             print(f"Harvester{h} total wait time: ", env.world.harvesters[h].total_wait_time)
         for t in range(all_args.num_transporter):
             print(f"Transporter{t} total trip: ", env.world.transporters[t].total_trip)
+            print(f"Transporter{t} total transport times: ", env.world.transporters[t].trans_times)
+    print(reward_ls, np.mean(reward_ls), np.std(reward_ls))
     # imageio.mimsave('render/env_auto_trans_mode_100_per_3_2.mp4', image_list)

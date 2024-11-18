@@ -40,6 +40,7 @@ def parse_args(args, parser):
     # Other settings
     parser.add_argument("--shared_reward", action='store_true', default=False, help='Whether agent share the same rewadr')
     parser.add_argument('--wait_time_factor', type=float, default=10.0, help="wait time factor")
+    parser.add_argument('--distance_factor', type=float, default=0.01, help="distanc factor")
     parser.add_argument('--trans_times_factor', type=float, default=10.0, help="trans times factor")
 
     all_args = parser.parse_known_args(args)[0]
@@ -64,7 +65,7 @@ def main(args):
     else:
         raise NotImplementedError
 
-    np.random.seed(7)
+    # np.random.seed(7)
     env = IAEnv(all_args)
     eval_episode_rewards = []
     actors = []
@@ -84,10 +85,10 @@ def main(args):
     with torch.no_grad():
         # print(env.env.initial_gripper1_pos,env.env.initial_gripper1_rot,env.env.initial_gripper2_pos,env.env.initial_gripper2_rot)
         for eval_step in range(all_args.episode_length):
-            print("step: ", eval_step, "\n")
+            # print("step: ", eval_step, "\n")
             # env.render()
-            img = env.render("rgb_array")[0]
-            frames.append(img)
+            # img = env.render("rgb_array")[0]
+            # frames.append(img)
             action = []
             for agent_id in range(all_args.num_transporter):
                 actor = actors[agent_id]
