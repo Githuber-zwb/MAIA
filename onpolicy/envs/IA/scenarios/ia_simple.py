@@ -1,7 +1,8 @@
 import numpy as np
 from numpy import random
-from onpolicy.envs.IA.ia_core import World, Harvester, Transporter, Field
+from onpolicy.envs.IA.ia_core import World, Harvester, Transporter, FieldIr
 from onpolicy.envs.IA.scenario import BaseScenario
+from onpolicy.envs.IA.GA.ga_algorithm import ga
 
 class Scenario(BaseScenario):
     def make_world(self, args):
@@ -9,11 +10,15 @@ class Scenario(BaseScenario):
         self.reset_world(world)
         return world
 
-    def reset_world(self, world: World):
+    def reset_world(self, world: World, use_ga_dispatch=False):
         world.reset()
-        arr = np.array(range(world.field.num_working_lines))
-        random.shuffle(arr)
-        newarr = np.array_split(arr, world.num_harvester)
+        if use_ga_dispatch:
+            # print("USE GA")
+            newarr = ga(world)
+        else:
+            arr = np.array(range(world.field.num_working_lines))
+            random.shuffle(arr)
+            newarr = np.array_split(arr, world.num_harvester)
         for i, harv in enumerate(world.harvesters):
             harv.dispatch_tasks(newarr[i])
 
@@ -75,9 +80,9 @@ if __name__ == "__main__":
     # environment settings
     parser.add_argument('--dt', type=float, default=0.1, help="simulation interval")
     parser.add_argument('--decision_dt', type=float, default=5.0, help="decision interval")
-    parser.add_argument("--episode_length", type=int, default=100)  
+    parser.add_argument("--episode_length", type=int, default=1000)  
     # Other settings
-    parser.add_argument("--shared_reward", action='store_false', default=True, help='Whether agent share the same rewadr')
+    parser.add_argument("--shared_reward", action='store_true', default=False, help='Whether agent share the same rewadr')
     parser.add_argument('--wait_time_factor', type=float, default=10.0, help="wait time factor")
     parser.add_argument('--distance_factor', type=float, default=0.01, help="distanc factor")
     parser.add_argument('--trans_times_factor', type=float, default=10.0, help="trans times factor")

@@ -2,6 +2,7 @@ import numpy as np
 import math
 import seaborn as sns
 from numpy import random
+import copy
 
 # 定义农田类
 class Field(object):
@@ -45,9 +46,66 @@ class Field(object):
         y_coor_2 = [self.field_length - self.headland_width/2 for _ in range(self.num_working_lines)]
         self.nav_points = np.array([[x_coor_1, y_coor_1],[x_coor_2, y_coor_2]]).transpose(0,2,1)
 
+# 定义新的农田类，农田可以是不规则形状，但是需要保证两条边平行
+# 需要保证左侧边和右侧边平行
+class FieldIr(object):
+    def __init__(self, vertices: np.array,  working_width = 3, yeild_per_m2 = 0.8, headland_width = 5, depot_pos = "random"):
+        # farm properties
+        assert vertices.shape == (4,2), "Wrong vertices shape!"  # 农场的四个顶点，分别是左下、左上、右上和右下顶点，需要保证左右两条边平行
+        assert vertices[0][0] == vertices[1][0] and vertices[2][0] == vertices[3][0], "The edges must be parallel"
+        assert vertices[0][1] < vertices[1][1] and vertices[2][1] > vertices[3][1]
+        self.vertices = vertices    # 农田的四个顶点
+        self.working_width = working_width  # 作业行宽度 (m)
+        self.yeild_per_m2 = yeild_per_m2    # 单位面积产量 (kg/m2)
+        self.headland_width = headland_width    # 地头宽度
+        self.field_width = self.vertices[3][0] - self.vertices[0][0]
+        self.num_working_lines = math.ceil(self.field_width / self.working_width) # 向上取整
+        # depot = self.vertices.copy()
+        vertices_nav_point = np.array([[self.vertices[0][0], self.vertices[0][1] + self.headland_width/2], \
+                                       [self.vertices[1][0], self.vertices[1][1] - self.headland_width/2], \
+                                       [self.vertices[2][0], self.vertices[2][1] - self.headland_width/2], \
+                                       [self.vertices[3][0], self.vertices[3][1] + self.headland_width/2]])
+
+        if depot_pos == "random":
+            randInt = np.random.randint(4)
+            if randInt == 0 or randInt == 1:
+                randIntops = (randInt + 1) % 2
+            else:
+                randIntops = 2 if randInt == 3 else 3
+            self.depot = self.vertices[randInt]
+            self.depot_nav_point = vertices_nav_point[randInt]
+            self.depot_nav_point_ops = vertices_nav_point[randIntops]
+            if randInt == 0 or randInt == 3:
+                self.start_side = 0
+            else:
+                self.start_side = 1
+        elif depot_pos == "fixed":
+            self.depot = self.vertices[0]
+            self.depot_nav_point = vertices_nav_point[0]
+            self.depot_nav_point_ops = vertices_nav_point[1]
+            self.start_side = 0
+        else: 
+            raise NotImplementedError
+        
+        self.compute_nav_points()
+
+    def compute_nav_points(self):
+        # 计算农田的导航点
+        # 返回: [2, num_working_lines, 2] numpy array. 
+        x_coor_1 = [self.vertices[0][0] + self.working_width/2 + i * self.working_width for i in range(self.num_working_lines - 1)]
+        x_coor_1.append(self.vertices[3][0] - self.working_width / 2)  #最后一个作业行用来封边
+        k1 = (self.vertices[3][1] - self.vertices[0][1]) / self.field_width
+        y_coor_1 = [self.vertices[0][1] + self.headland_width / 2 + (x - self.vertices[0][0]) * k1 for x in x_coor_1]
+
+        x_coor_2 = x_coor_1[:]
+        k2 = (self.vertices[2][1] - self.vertices[1][1]) / self.field_width
+        y_coor_2 = [self.vertices[1][1] -  self.headland_width / 2 + (x - self.vertices[1][0]) * k2 for x in x_coor_2]
+        self.nav_points = np.array([[x_coor_1, y_coor_1],[x_coor_2, y_coor_2]]).transpose(0,2,1)
+        # print(self.nav_points)
+
 # 定义收割机类
 class Harvester(object):
-    def __init__(self, field: Field, speed = 1.5, capacity = 1800, transporting_speed = 200, dt = 0.1):
+    def __init__(self, field: FieldIr, speed = 1.5, capacity = 1800, transporting_speed = 200, dt = 0.1):
         self.id = 0
         self.name = ''
         self.color = None
@@ -74,14 +132,10 @@ class Harvester(object):
 
     def dispatch_tasks(self, working_lines):
         self.working_lines = working_lines  # the working lines
-        if self.field.depot[1] == 0:    # start_side标识起始作业位置，0表示南侧（y==0)，1表示北侧
-            start_side = 0
-        else:
-            start_side = 1
         nav_points = []
         nav_points.append(self.field.depot)
         nav_points.append(self.field.depot_nav_point)   # 从机库出发
-        if not start_side: # start side = 0
+        if not self.field.start_side: # start side = 0
             for i in range(len(self.working_lines)):
                 nav_points.append(self.field.nav_points[i % 2, self.working_lines[i], :])
                 nav_points.append(self.field.nav_points[(i + 1) % 2, self.working_lines[i], :])
@@ -104,7 +158,13 @@ class Harvester(object):
         self.dir = (self.curr_nav_point - self.old_nav_point) / np.linalg.norm(self.curr_nav_point - self.old_nav_point)
 
     def in_harvest_field(self):
-        return self.field.crop_x_range[0] < self.pos[0] < self.field.crop_x_range[1] and self.field.crop_y_range[0] <= self.pos[1] <= self.field.crop_y_range[1]
+        if self.dir[1] != 1 and self.dir[1] != -1:
+            return False
+        if self.cur_working_line == -1:
+            return False
+        if abs(self.pos[1] - self.curr_nav_point[1]) <= self.field.headland_width/2 or abs(self.pos[1] - self.old_nav_point[1]) <= self.field.headland_width/2:
+            return False
+        return True
 
     def move(self):
         if self.complete_traj: 
@@ -144,7 +204,7 @@ class Harvester(object):
     def transport(self):
         self.load = max(0.0, self.load - self.transporting_speed * self.dt)
         self.load_percent = self.load / self.capacity
-        if self.load_percent == 0.0:
+        if self.load_percent == 0.0 and self.able_to_trans:
             self.able_to_trans = False
             self.last_trans_time = self.time
 
@@ -179,7 +239,7 @@ class Harvester(object):
         return state
 
 class Transporter(object):
-    def __init__(self, field: Field, speed = 6, capacity = 8000, transporting_speed = 200, dt = 0.1, pos_error = 2):
+    def __init__(self, field: FieldIr, speed = 6, capacity = 8000, transporting_speed = 200, dt = 0.1, pos_error = 2):
         self.id = 0
         self.name = ''
         self.color = None
@@ -222,13 +282,21 @@ class Transporter(object):
         assert point.size == 2, "The point must has 2 dimensions."
         if len(self.nav_points) > 0 and np.all(self.nav_points[-1] == point): return    # 最后一个导航点和新导航点不重合
         self.nav_points.append(point)
-        assert point[0] == self.nav_points[-1][0] or point[1] == self.nav_points[-1][1], "The harvester can only move Horizontally and Vertically."
+        # assert point[0] == self.nav_points[-1][0] or point[1] == self.nav_points[-1][1], "The harvester can only move Horizontally and Vertically."
 
     def vehicle_in_north_side(self):
-        return self.pos[1] > self.field.field_length / 2
-    
+        p1 = np.array([self.field.vertices[0][0], (self.field.vertices[0][1] + self.field.vertices[1][1]) / 2])
+        p2 = np.array([self.field.vertices[2][0], (self.field.vertices[2][1] + self.field.vertices[3][1]) / 2])
+        a1 = p1 - self.pos
+        a2 = p2 - self.pos
+        return np.cross(a1, a2) > 0
+
     def point_in_north_side(self, point):
-        return point[1] > self.field.field_length / 2
+        p1 = np.array([self.field.vertices[0][0], (self.field.vertices[0][1] + self.field.vertices[1][1]) / 2])
+        p2 = np.array([self.field.vertices[2][0], (self.field.vertices[2][1] + self.field.vertices[3][1]) / 2])
+        a1 = p1 - point
+        a2 = p2 - point
+        return np.cross(a1, a2) > 0
 
     def in_same_side(self, point):  # 判断当前车辆位置和传入的点是不是在一侧
         if self.vehicle_in_north_side() and self.point_in_north_side(point):
@@ -326,7 +394,19 @@ class Transporter(object):
         return
     
     def in_head_lines(self):
-        return self.pos[1] == self.field.headland_width/2 or self.pos[1] == self.field.field_length - self.field.headland_width / 2
+        p1 = self.field.vertices[0] + np.array([0, self.field.headland_width / 2])
+        p2 = self.field.vertices[3] + np.array([0, self.field.headland_width / 2])
+        a1 = p1 - self.pos
+        a2 = p2 - self.pos
+        if np.cross(a1, a2) == 0:
+            return True
+        p3 = self.field.vertices[1] - np.array([0, self.field.headland_width / 2])
+        p4 = self.field.vertices[2] - np.array([0, self.field.headland_width / 2])
+        a3 = p3 - self.pos
+        a4 = p4 - self.pos
+        if np.cross(a3, a4) == 0:
+            return True
+        return False
     
     def assign_return_head_nav_points(self):
         assert self.nav_points == [], "Cannot assign nav points when former task has not finished."
@@ -471,8 +551,6 @@ class World(object):
     def __init__(self, args):
         # farm properties
         self.world_step = 0
-        # self.field = Field(field_width=99.01)
-        self.field = Field()
 
         self.color_list = np.array([[1, 0, 0],
         [0, 1, 0],
@@ -504,6 +582,15 @@ class World(object):
         self.trans_capmin = args.trans_capmin
         self.trans_capmax = args.trans_capmax
 
+        x0 = np.random.randint(-80, -40)
+        x1 = np.random.randint(40, 80)
+        y0 = np.random.randint(-200, -150)
+        y1 = np.random.randint(150, 200)
+        y2 = np.random.randint(150, 200)
+        y3 = np.random.randint(-200, -150)
+        vertices = np.array([[x0, y0], [x0, y1], [x1, y2], [x1, y3]])
+        self.field = FieldIr(vertices)
+
         self.harvesters = [Harvester(field=self.field, speed=np.random.uniform(self.harv_vmin, self.harv_vmax), \
                                      capacity=int(np.random.uniform(self.harv_capmin, self.harv_capmmax)) * 100, \
                                      dt = self.dt) for i in range(self.num_harvester)]
@@ -524,7 +611,15 @@ class World(object):
         self.transporters.clear()
         self.world_step = 0
 
-        self.field = Field()
+        x0 = np.random.randint(-80, -40)
+        x1 = np.random.randint(40, 80)
+        y0 = np.random.randint(-200, -140)
+        y1 = np.random.randint(140, 200)
+        y2 = np.random.randint(140, 200)
+        y3 = np.random.randint(-200, -140)
+        vertices = np.array([[x0, y0], [x0, y1], [x1, y2], [x1, y3]])
+        self.field = FieldIr(vertices)
+
         self.harvesters = [Harvester(field=self.field, speed=np.random.uniform(self.harv_vmin, self.harv_vmax), \
                                      capacity=int(np.random.uniform(self.harv_capmin, self.harv_capmmax)) * 100, \
                                      dt = self.dt) for _ in range(self.num_harvester)]
@@ -616,12 +711,13 @@ def test_trans():
     print(trans1.nav_points)
     print(trans1.get_state())
 
+def test_field_ir():
+    vertices = np.array([[0,-5], [0,50], [31, 110.5], [31, -20]])
+    field = FieldIr(vertices)
+    print(field.nav_points)
+
 
 if __name__ == "__main__":
-    test_harv()
+    # test_harv()
     # test_trans()
-    # field = Field()
-    # harv = Harvester(field)
-    # field.field_width = 200
-    # print(harv.field.field_width)
-
+    test_field_ir()

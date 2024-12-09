@@ -90,7 +90,6 @@ class IAMultiAgentEnv(gym.Env):
                     print("*"*10)
                     self.world.harvesters[i].load = 0.0
                     self.world.harvesters[i].load_percent = 0.0
-
         elif auto_trans_mode:
             assert decPt != None, "Decision Point must be provided!"
             for i in range(self.world.num_transporter):
@@ -110,10 +109,10 @@ class IAMultiAgentEnv(gym.Env):
                             if not self.world.transporters[k].has_dispatch_task:
                                 self.world.transporters[k].set_action(2, self.world.harvesters[i])
                                 break
-
         else:
             for i, agent in enumerate(self.world.transporters):
                 self._set_action(action_n[i], agent)
+                
         # advance world state
         reward_n = [0.0 for _ in range(self.world.num_transporter)]
         reward_global = 0.0
@@ -262,8 +261,8 @@ class IAMultiAgentEnv(gym.Env):
                 from . import rendering
                 # self.viewers[i] = rendering.Viewer(600, 800)
                 # self.viewers[i].set_bounds(-300, 300, -100, 700)
-                self.viewers[i] = rendering.Viewer(250 * scale, 350 * scale)
-                self.viewers[i].set_bounds(-10 * scale, 240 * scale , -10 * scale, 340 * scale)
+                self.viewers[i] = rendering.Viewer(320 * scale, 400 * scale)
+                self.viewers[i].set_bounds(-80 * scale, 240 * scale , -200 * scale, 200 * scale)
 
         # create rendering geometry
         if self.render_geoms is None:
@@ -300,9 +299,7 @@ class IAMultiAgentEnv(gym.Env):
                 self.render_geoms.append(line)
 
             # The whole field
-            field = rendering.make_polygon([(0, 0), (self.world.field.field_width * scale, 0), \
-                                            (self.world.field.field_width * scale, self.world.field.field_length * scale),\
-                                            (0, self.world.field.field_length * scale)], False)
+            field = rendering.make_polygon(self.world.field.vertices * scale, False)
             field.set_color(0, 0, 0)
             self.render_geoms.append(field)
 
@@ -314,23 +311,24 @@ class IAMultiAgentEnv(gym.Env):
             self.render_geoms.append(acircle)
 
             # The harvesting area
-            harv_area = rendering.make_polygon([(0, self.world.field.headland_width * scale), \
-                                                (0, self.world.field.field_length * scale - self.world.field.headland_width * scale), \
-                                                (self.world.field.field_width * scale, self.world.field.field_length * scale - self.world.field.headland_width * scale), \
-                                                (self.world.field.field_width * scale, self.world.field.headland_width * scale)], False)
+            harv_area = rendering.make_polygon(np.array([[self.world.field.vertices[0][0], self.world.field.vertices[0][1] + self.world.field.headland_width], \
+                                            [self.world.field.vertices[1][0], self.world.field.vertices[1][1] - self.world.field.headland_width], \
+                                            [self.world.field.vertices[2][0], self.world.field.vertices[2][1] - self.world.field.headland_width], \
+                                            [self.world.field.vertices[3][0], self.world.field.vertices[3][1] + self.world.field.headland_width]]) * scale, False)
             # harv_area.set_color(0.941, 1, 0.941)
             harv_area.set_color(0, 1, 0)
             harv_area.set_linewidth(2 * scale)
             self.render_geoms.append(harv_area)
 
             # The headland
-            headland1 = rendering.make_polygon([(0, 0), (0, self.world.field.headland_width * scale), \
-                                                (self.world.field.field_width * scale, self.world.field.headland_width * scale), \
-                                                (self.world.field.field_width* scale, 0)], False)
-            headland2 = rendering.make_polygon([(0, self.world.field.field_length * scale - self.world.field.headland_width * scale), \
-                                                (0, self.world.field.field_length* scale), \
-                                                (self.world.field.field_width * scale, self.world.field.field_length * scale), \
-                                                (self.world.field.field_width * scale, self.world.field.field_length * scale - self.world.field.headland_width * scale)], False)
+            headland1 = rendering.make_polygon(np.array([[self.world.field.vertices[0][0], self.world.field.vertices[0][1]], \
+                                            [self.world.field.vertices[0][0], self.world.field.vertices[0][1] + self.world.field.headland_width], \
+                                            [self.world.field.vertices[3][0], self.world.field.vertices[3][1] + self.world.field.headland_width], \
+                                            [self.world.field.vertices[3][0], self.world.field.vertices[3][1]]]) * scale, False)
+            headland2 = rendering.make_polygon(np.array([[self.world.field.vertices[1][0], self.world.field.vertices[1][1]], \
+                                            [self.world.field.vertices[1][0], self.world.field.vertices[1][1] - self.world.field.headland_width], \
+                                            [self.world.field.vertices[2][0], self.world.field.vertices[2][1] - self.world.field.headland_width], \
+                                            [self.world.field.vertices[2][0], self.world.field.vertices[2][1]]]) * scale, False)
             headland1.set_color(0.5, 0.164, 0.164)
             headland1.set_linewidth(1 * scale)
             headland2.set_color(0.5, 0.164, 0.164)
@@ -359,30 +357,30 @@ class IAMultiAgentEnv(gym.Env):
             self.text_geoms = []
             for h, harv in enumerate(self.world.harvesters):
                 label = pyglet.text.Label(f"Harvester {h}", font_size=10,
-                                x=120*scale, y=(300-h*20/scale)*scale , anchor_x='left', anchor_y='bottom',
+                                x=120*scale, y=(180-h*20/scale)*scale , anchor_x='left', anchor_y='bottom',
                                 color=(0, 0, 0, 255))
                 label.draw()
                 self.text_geoms.append(DrawText(label))
                 acircle = rendering.make_circle(2 * scale, 30)
-                transl = rendering.Transform(translation=np.array([110*scale, (305-h*20/scale)*scale]))
+                transl = rendering.Transform(translation=np.array([110*scale, (185-h*20/scale)*scale]))
                 acircle.set_color(*harv.color)
                 acircle.add_attr(transl)
                 self.render_geoms.append(acircle)
             for t, trans in enumerate(self.world.transporters):
                 label = pyglet.text.Label(f"Transporter {t}", font_size=10,
-                                x=120*scale, y=(300-(h+1)*20/scale-t*20/scale)*scale , anchor_x='left', anchor_y='bottom',
+                                x=120*scale, y=(180-(h+1)*20/scale-t*20/scale)*scale , anchor_x='left', anchor_y='bottom',
                                 color=(0, 0, 0, 255))
                 label.draw()
                 self.text_geoms.append(DrawText(label))
                 acircle = rendering.make_circle(4 * scale, 30)
-                transl = rendering.Transform(translation=np.array([110*scale, (305-(h+1)*20/scale-t*20/scale)*scale]))
+                transl = rendering.Transform(translation=np.array([110*scale, (185-(h+1)*20/scale-t*20/scale)*scale]))
                 acircle.set_color(*trans.color)
                 acircle.add_attr(transl)
                 self.render_geoms.append(acircle)
             # add time 
             # print(self.current_step)
             label = pyglet.text.Label("Time: ", font_size=10,
-                            x=120*scale, y=(300-(h+1)*20/scale-(t+1)*20/scale)*scale , anchor_x='left', anchor_y='bottom',
+                            x=120*scale, y=(180-(h+1)*20/scale-(t+1)*20/scale)*scale , anchor_x='left', anchor_y='bottom',
                             color=(0, 0, 0, 255))
             label.draw()
             self.text_geoms.append(DrawText(label))
