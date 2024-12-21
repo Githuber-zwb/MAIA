@@ -2,68 +2,140 @@ import numpy as np
 import math
 import seaborn as sns
 from numpy import random
+import copy
 
+# 定义农田类
 class Field(object):
-    def __init__(self, args):
+    def __init__(self, field_length = 310, field_width = 100, working_width = 3, yeild_per_m2 = 0.8, headland_width = 5, depot_pos = "random"):
         # farm properties
-        self.field_length = args.field_length
-        self.field_width = args.field_width
-        self.working_width = args.working_width
-        self.headland_width = args.headland_width
-        self.ridge_width = args.ridge_width
+        self.field_length = field_length    # 农田长度（m）
+        self.field_width = field_width      # 农田宽度（m）
+        self.working_width = working_width  # 作业行宽度 (m)
+        self.yeild_per_m2 = yeild_per_m2    # 单位面积产量 (kg/m2)
+        self.headland_width = headland_width    # 地头宽度
 
-        depot = np.array([[0,0], [0, self.field_length], [self.field_width, 0], [self.field_width, self.field_length]])
-        self.depot = depot[random.randint(0,4), :]
-        self.num_working_lines = math.ceil(self.field_width/self.working_width)
-        self.ridge_length = self.field_length - 2 * self.headland_width
-        self.working_line_length = self.field_length - self.headland_width  # length of a working line
+        depot = np.array([[0,0], [self.field_width, 0], [0, self.field_length], [self.field_width, self.field_length]])
+        depot_nav_point = np.array([[0,self.headland_width/2], [self.field_width, self.headland_width/2], \
+                                    [0, self.field_length - self.headland_width/2], [self.field_width, self.field_length - self.headland_width/2]])
+        if depot_pos == "random":
+            randInt = random.randint(0,4)
+            randIntops = (randInt + 2) % 4
+            self.depot = depot[randInt, :]
+            self.depot_nav_point = depot_nav_point[randInt, :]
+            self.depot_nav_point_ops = depot_nav_point[randIntops, :]
+        elif depot_pos == "fixed":
+            self.depot = depot[0, :]
+            self.depot_nav_point = depot_nav_point[0, :]
+            self.depot_nav_point_ops = depot_nav_point[2, :]
+        else: 
+            raise NotImplementedError
+        self.num_working_lines = math.ceil(self.field_width / self.working_width) # 向上取整
+        self.working_line_length = self.field_length - self.headland_width 
+        self.crop_x_range = [0, self.field_width]
+        self.crop_y_range = [self.headland_width, self.field_length - self.headland_width]
 
-        self.compute_ridges()
         self.compute_nav_points()
 
-    def compute_ridges(self):
-        # return the center of all the ridges
-        # return: a (self.num_working_lines - 1, 2) numpt array, each row is the center of a ridge.
-        self.ridges = np.array([[(i+1) * self.working_width, self.field_length/2] for i in range(self.num_working_lines - 1)])
-
     def compute_nav_points(self):
-        #computes the navigation points
-        #return: a [2, num_working_lines, 2] numpy array. 
-        x_coor_1 = [self.working_width/2 + i * self.working_width for i in range(self.num_working_lines)]
+        # 计算农田的导航点
+        # 返回: [2, num_working_lines, 2] numpy array. 
+        x_coor_1 = [self.working_width/2 + i * self.working_width for i in range(self.num_working_lines - 1)]
+        x_coor_1.append(self.field_width - self.working_width / 2)  #最后一个作业行用来封边
         y_coor_1 = [self.headland_width/2 for _ in range(self.num_working_lines)]
-        x_coor_2 = [self.working_width/2 + i * self.working_width for i in range(self.num_working_lines)]
+        x_coor_2 = x_coor_1[:]
         y_coor_2 = [self.field_length - self.headland_width/2 for _ in range(self.num_working_lines)]
         self.nav_points = np.array([[x_coor_1, y_coor_1],[x_coor_2, y_coor_2]]).transpose(0,2,1)
 
+# 定义新的农田类，农田可以是不规则形状，但是需要保证两条边平行
+# 需要保证左侧边和右侧边平行
+class FieldIr(object):
+    def __init__(self, vertices: np.array,  working_width = 3, yeild_per_m2 = 0.8, headland_width = 5, depot_pos = "random"):
+        # farm properties
+        assert vertices.shape == (4,2), "Wrong vertices shape!"  # 农场的四个顶点，分别是左下、左上、右上和右下顶点，需要保证左右两条边平行
+        assert vertices[0][0] == vertices[1][0] and vertices[2][0] == vertices[3][0], "The edges must be parallel"
+        assert vertices[0][1] < vertices[1][1] and vertices[2][1] > vertices[3][1]
+        self.vertices = vertices    # 农田的四个顶点
+        self.working_width = working_width  # 作业行宽度 (m)
+        self.yeild_per_m2 = yeild_per_m2    # 单位面积产量 (kg/m2)
+        self.headland_width = headland_width    # 地头宽度
+        self.field_width = self.vertices[3][0] - self.vertices[0][0]
+        self.num_working_lines = math.ceil(self.field_width / self.working_width) # 向上取整
+        # depot = self.vertices.copy()
+        vertices_nav_point = np.array([[self.vertices[0][0], self.vertices[0][1] + self.headland_width/2], \
+                                       [self.vertices[1][0], self.vertices[1][1] - self.headland_width/2], \
+                                       [self.vertices[2][0], self.vertices[2][1] - self.headland_width/2], \
+                                       [self.vertices[3][0], self.vertices[3][1] + self.headland_width/2]])
+
+        if depot_pos == "random":
+            randInt = np.random.randint(4)
+            if randInt == 0 or randInt == 1:
+                randIntops = (randInt + 1) % 2
+            else:
+                randIntops = 2 if randInt == 3 else 3
+            self.depot = self.vertices[randInt]
+            self.depot_nav_point = vertices_nav_point[randInt]
+            self.depot_nav_point_ops = vertices_nav_point[randIntops]
+            if randInt == 0 or randInt == 3:
+                self.start_side = 0
+            else:
+                self.start_side = 1
+        elif depot_pos == "fixed":
+            self.depot = self.vertices[0]
+            self.depot_nav_point = vertices_nav_point[0]
+            self.depot_nav_point_ops = vertices_nav_point[1]
+            self.start_side = 0
+        else: 
+            raise NotImplementedError
+        
+        self.compute_nav_points()
+
+    def compute_nav_points(self):
+        # 计算农田的导航点
+        # 返回: [2, num_working_lines, 2] numpy array. 
+        x_coor_1 = [self.vertices[0][0] + self.working_width/2 + i * self.working_width for i in range(self.num_working_lines - 1)]
+        x_coor_1.append(self.vertices[3][0] - self.working_width / 2)  #最后一个作业行用来封边
+        k1 = (self.vertices[3][1] - self.vertices[0][1]) / self.field_width
+        y_coor_1 = [self.vertices[0][1] + self.headland_width / 2 + (x - self.vertices[0][0]) * k1 for x in x_coor_1]
+
+        x_coor_2 = x_coor_1[:]
+        k2 = (self.vertices[2][1] - self.vertices[1][1]) / self.field_width
+        y_coor_2 = [self.vertices[1][1] -  self.headland_width / 2 + (x - self.vertices[1][0]) * k2 for x in x_coor_2]
+        self.nav_points = np.array([[x_coor_1, y_coor_1],[x_coor_2, y_coor_2]]).transpose(0,2,1)
+        # print(self.nav_points)
+
+# 定义收割机类
 class Harvester(object):
-    def __init__(self, args, field, speed = 3.0, capacity = 30.0, start_side = 0):
-        self.i = 0
+    def __init__(self, field: FieldIr, speed = 1.5, capacity = 1800, transporting_speed = 200, dt = 0.1):
+        self.id = 0
         self.name = ''
         self.color = None
         self.field = field
-        self.dt = args.dt
-
-        self.yeild_per_meter = args.yeild_per_meter
-        self.transporting_speed = args.transporting_speed
-        self.start_side = start_side    # which side to start(0 or 1)
-        self.speed = float(speed)   # drive at maximum speed
-        self.capacity = float(capacity)
+        self.speed = float(speed)   # 收割机的运行速度(m/s)
+        self.capacity = float(capacity)    # 容量，以kg为单位，1800kg约折合2.4立方米小麦。
+        self.transporting_speed = transporting_speed    # 转运速度，kg/s
+        self.dt = dt
+        self.yeild_per_second = self.field.yeild_per_m2 * self.field.working_width * self.speed    # 计算得到收割机以最大速度行驶时每秒的产量(kg/s)，default得到的是3.6
         
-        self.field_x_range = [0, self.field.field_width]
-        self.field_y_range = [self.field.headland_width, self.field.field_length - self.field.headland_width]
-
-        self.load = 0.0
+        self.pos = self.field.depot  # 所有收割机都初始化在粮仓位置
+        self.time = 0.0 # 记录当前时刻
+        self.last_trans_time = 0.0  # 记录上一次转运完成时间
+        self.total_wait_time = 0.0  # 记录总的等待时间
+        self.new_wait_time = 0.0    # 记录新增加的等待时间
+        self.load = 0.0 # 当前收割机的总负载
+        self.cur_working_line = -1  # 开始时的作业行标识为-1
+        self.last_working_line = -1 # 上一个作业行标记为-1
         self.load_percent = self.load / self.capacity
-        self.moving = True
-        self.full = False
-        self.transporting = False
-        self.complete_task = False
+        self.complete_traj = False
+        self.has_a_trans = False
+        self.able_to_trans = False
+        self.chosen = False
 
-    def assign_nav_points(self, working_lines, start_side):
+    def dispatch_tasks(self, working_lines):
         self.working_lines = working_lines  # the working lines
-        self.start_side = start_side
         nav_points = []
-        if not self.start_side: # start side = 0
+        nav_points.append(self.field.depot)
+        nav_points.append(self.field.depot_nav_point)   # 从机库出发
+        if not self.field.start_side: # start side = 0
             for i in range(len(self.working_lines)):
                 nav_points.append(self.field.nav_points[i % 2, self.working_lines[i], :])
                 nav_points.append(self.field.nav_points[(i + 1) % 2, self.working_lines[i], :])
@@ -71,323 +143,581 @@ class Harvester(object):
             for i in range(len(self.working_lines)):
                 nav_points.append(self.field.nav_points[(i + 1) % 2, self.working_lines[i], :])
                 nav_points.append(self.field.nav_points[i % 2, self.working_lines[i], :])
+        if len(self.working_lines) % 2 == 1:
+            nav_points.append(self.field.depot_nav_point_ops)   # 如果奇数个作业行，农机会停在对面位置，需要先导航到机库对面的导航点再回机库
+            nav_points.append(self.field.depot) # 回到机库
+        else:
+            nav_points.append(self.field.depot_nav_point)   # 如果偶数作业行，返回临近机库的导航点，再回到机库
+            nav_points.append(self.field.depot) # 回到机库
         self.nav_points = np.array(nav_points)
+        # self.nav_points = nav_points
 
-        self.pos = self.nav_points[0]
         self.nav = 1    # curr nav point
         self.old_nav_point = self.nav_points[self.nav - 1]
         self.curr_nav_point = self.nav_points[self.nav]
         self.dir = (self.curr_nav_point - self.old_nav_point) / np.linalg.norm(self.curr_nav_point - self.old_nav_point)
 
-    def update_pos(self):
-        # if the harvester capacity is full, do not update position(it is stop)
-        # if the car is transporting or has complete task, do not move
-        if self.full or self.transporting or self.complete_task:  
-            return
-        else:
-            pred_new_pos = self.pos + self.dir * self.dt * self.speed
-            while (pred_new_pos - self.old_nav_point) @ (pred_new_pos - self.curr_nav_point) > 0:
-                left_dis = np.linalg.norm(pred_new_pos - self.curr_nav_point)
-                self.nav += 1
-                if self.nav == len(self.nav_points):    #complete task
-                    self.complete_task = True
-                    return
-                self.curr_nav_point = self.nav_points[self.nav]
-                self.old_nav_point = self.nav_points[self.nav - 1]
-                self.dir = (self.curr_nav_point - self.old_nav_point) / np.linalg.norm(self.curr_nav_point - self.old_nav_point)
-                pred_new_pos = self.old_nav_point + left_dis * self.dir
-            self.pos = pred_new_pos
+    def in_harvest_field(self):
+        if self.dir[1] != 1 and self.dir[1] != -1:
+            return False
+        if self.cur_working_line == -1:
+            return False
+        if abs(self.pos[1] - self.curr_nav_point[1]) <= self.field.headland_width/2 or abs(self.pos[1] - self.old_nav_point[1]) <= self.field.headland_width/2:
+            return False
+        return True
 
-    def update_load(self):
-        if self.transporting:
-            self.stop = True
-            self.load = max(0, self.load - self.transporting_speed * self.dt)
-            if self.load == 0:
-                self.stop = False
-                self.transporting = False
-        if self.stop or self.complete_task:
+    def move(self):
+        if self.complete_traj: 
             return
-        elif self.in_harvest_field():
-            self.load = self.load + self.yeild_per_meter * self.speed * self.dt
+        
+        # 更新自身位置
+        pred_new_pos = self.pos + self.dir * self.dt * self.speed
+        while (pred_new_pos - self.old_nav_point) @ (pred_new_pos - self.curr_nav_point) > 0: 
+            left_dis = np.linalg.norm(pred_new_pos - self.curr_nav_point)
+            self.nav += 1
+            if self.nav == len(self.nav_points):    #complete task
+                self.pos =self.nav_points[-1]
+                self.complete_traj = True
+                return
+            self.curr_nav_point = self.nav_points[self.nav]
+            self.old_nav_point = self.nav_points[self.nav - 1]
+            self.dir = (self.curr_nav_point - self.old_nav_point) / np.linalg.norm(self.curr_nav_point - self.old_nav_point)
+            pred_new_pos = self.old_nav_point + left_dis * self.dir
+        self.pos = pred_new_pos
+
+        # 更新作业行信息
+        if 0 <= self.nav - 2 < len(self.working_lines) * 2:
+            if self.cur_working_line != self.working_lines[math.floor((self.nav - 2) / 2)]:
+                self.last_working_line = self.cur_working_line
+                self.cur_working_line = self.working_lines[math.floor((self.nav - 2) / 2)]
+        elif self.nav - 2 >= len(self.working_lines) * 2:
+            self.last_working_line = self.working_lines[-1]
+            self.cur_working_line = -1
+
+        # 更新粮仓储量
+        if self.in_harvest_field():
+            self.load += self.yeild_per_second * self.dt
             if self.load > self.capacity:
                 self.load = self.capacity
-                self.stop = True
-
-    def in_harvest_field(self):
-        return self.field_x_range[0] <= self.pos[0] <= self.field_x_range[1] and self.field_y_range[0] <= self.pos[1] <= self.field_y_range[1]
-
-    def update_state(self):
-        # self.update_pos()
-        # self.update_load()
-        if self.full and self.in_harvest_field():
-            self.moving = False
-
-        if self.moving:
-            pred_new_pos = self.pos + self.dir * self.dt * self.speed
-            while (pred_new_pos - self.old_nav_point) @ (pred_new_pos - self.curr_nav_point) > 0:
-                left_dis = np.linalg.norm(pred_new_pos - self.curr_nav_point)
-                self.nav += 1
-                if self.nav == len(self.nav_points):    #complete task
-                    self.complete_task = True
-                    self.moving = False
-                    return
-                self.curr_nav_point = self.nav_points[self.nav]
-                self.old_nav_point = self.nav_points[self.nav - 1]
-                self.dir = (self.curr_nav_point - self.old_nav_point) / np.linalg.norm(self.curr_nav_point - self.old_nav_point)
-                pred_new_pos = self.old_nav_point + left_dis * self.dir
-            self.pos = pred_new_pos
-            if self.in_harvest_field():
-                self.load = self.load + self.yeild_per_meter * self.speed * self.dt
-                if self.load > self.capacity:
-                    self.load = self.capacity
-                    self.full = True
-
-        if self.transporting:
-            # self.moving = False
-            if not self.complete_task:
-                self.moving = True
-            self.full = False
-            self.load = max(0, self.load - self.transporting_speed * self.dt)
-            # if self.load == 0:  #complete transporting
-                # if not self.complete_task:
-                    # self.moving = True
-                # self.transporting = False
-            
         self.load_percent = self.load / self.capacity
 
+    def transport(self):
+        self.load = max(0.0, self.load - self.transporting_speed * self.dt)
+        self.load_percent = self.load / self.capacity
+        if self.load_percent == 0.0 and self.able_to_trans:
+            self.able_to_trans = False
+            self.last_trans_time = self.time
+
+    def update_state(self):
+        self.time += self.dt
+        old_wait_time = self.total_wait_time
+
+        if self.complete_traj:
+            self.able_to_trans = False
+            return
+
+        if self.time - self.last_trans_time < 60:   # 两次转运的间隔大于60s
+            self.able_to_trans = False
+        else:
+            self.able_to_trans = True
+
+        if self.has_a_trans and self.able_to_trans:
+            self.transport()
+        elif self.load_percent != 1.0:
+            self.move()
+        else:
+            self.total_wait_time += self.dt # 产生等待时间
+
+        self.new_wait_time = self.total_wait_time - old_wait_time
+
+    def get_state(self):    # 13 dim
+        # state = np.concatenate([[self.id], self.pos, self.dir, [self.capacity - self.load], [self.load_percent], \
+        #                         [int(self.able_to_trans)], [self.cur_working_line], [self.last_trans_time], [self.time - self.last_trans_time]])
+        state = np.concatenate([[self.id], [self.speed], np.array(self.pos) / 100, self.dir, [(self.capacity - self.load) / 100],\
+                                 np.array(self.curr_nav_point) / 100, np.array(self.old_nav_point) / 100, [float(self.chosen)], \
+                                [float(self.complete_traj)], [(self.time - self.last_trans_time) / 100]])
+        return state
+
 class Transporter(object):
-    def __init__(self, args, field, speed = 10.0, capacity = 100.0):
-        self.i = 0
+    def __init__(self, field: FieldIr, speed = 6, capacity = 8000, transporting_speed = 200, dt = 0.1, pos_error = 2):
+        self.id = 0
         self.name = ''
         self.color = None
         self.field = field
-        self.dt = args.dt
-        self.transporting_speed = args.transporting_speed
-        self.unloading_speed = args.unloading_speed
-        self.capacity = float(capacity)
-        self.max_velocity = float(speed)
-
-        self.pos = np.array([0.0, 0.0])
-        self.vel = np.array([0.0, 0.0])
-        self.load = 0
+        self.dt = dt
+        self.transporting_speed = transporting_speed    # 转运速度，kg/s，需要和harvester的转运速度一致
+        self.capacity = float(capacity) # 容量，单位kg，运粮车的容量要明显大于收割机
+        self.speed = float(speed)   # 行驶速度，单位m/s
+        self.pos_error = pos_error  # 认为收割机和运粮车相距多远即可开始转运。需要根据二者速度和dt计算：(v_1 + v_2) * dt / 2
+        
+        self.total_trip = 0.0   #总行驶路程，单位m
+        self.trans_times: int = 0   #总转运次数
+        self.nav_points =[]
+        self.pos = self.field.depot # 运粮车初始位置在粮仓
+        self.dir = np.zeros(2)
+        self.load = 0.0
         self.load_percent = self.load / self.capacity
+        self.has_dispatch_task = False  # 当前是否有调运任务。调运任务包括返回机库卸粮和前往指定收割机转运
+        # 返回机库卸载粮食
+        self.returning_to_depot = False # 当前是否在返回机库
+        self.unloading = False  # 当前是否在机库卸粮
+        # 前往指定收割机分成三个阶段：寻找收割机，转运，回到地头
+        self.searching_for_harv = False
         self.transporting = False
-        self.unloading = False
-        self.empty = True
-        self.full = False
+        self.returning_to_headland = False
+        self.last_nav_point = np.zeros(2)   # 保存上一个导航点
+        self.serving_harv = None
 
-    def init_pos(self, pos):
-        self.pos = pos
+        self.new_trip_len = 0.0
+        self.new_trans_times = 0
+    
+    def get_state(self):    # 5 dim
+        # state = np.concatenate([[self.id], self.pos, self.dir, [self.capacity - self.load], [self.load_percent], \
+        #                         [float(self.has_dispatch_task)], [float(self.returning_to_depot)], [float(self.unloading)], \
+        #                         [float(self.searching_for_harv)], [float(self.transporting)], [float(self.returning_to_headland)]])
+        state = np.concatenate([[self.speed], np.array(self.pos) / 100, [(self.capacity - self.load) / 100], [float(self.has_dispatch_task)]])
+        return state
+
+    def add_nav_point(self, point):
+        assert point.size == 2, "The point must has 2 dimensions."
+        if len(self.nav_points) > 0 and np.all(self.nav_points[-1] == point): return    # 最后一个导航点和新导航点不重合
+        self.nav_points.append(point)
+        # assert point[0] == self.nav_points[-1][0] or point[1] == self.nav_points[-1][1], "The harvester can only move Horizontally and Vertically."
+
+    def vehicle_in_north_side(self):
+        p1 = np.array([self.field.vertices[0][0], (self.field.vertices[0][1] + self.field.vertices[1][1]) / 2])
+        p2 = np.array([self.field.vertices[2][0], (self.field.vertices[2][1] + self.field.vertices[3][1]) / 2])
+        a1 = p1 - self.pos
+        a2 = p2 - self.pos
+        return np.cross(a1, a2) > 0
+
+    def point_in_north_side(self, point):
+        p1 = np.array([self.field.vertices[0][0], (self.field.vertices[0][1] + self.field.vertices[1][1]) / 2])
+        p2 = np.array([self.field.vertices[2][0], (self.field.vertices[2][1] + self.field.vertices[3][1]) / 2])
+        a1 = p1 - point
+        a2 = p2 - point
+        return np.cross(a1, a2) > 0
+
+    def in_same_side(self, point):  # 判断当前车辆位置和传入的点是不是在一侧
+        if self.vehicle_in_north_side() and self.point_in_north_side(point):
+            return True
+        elif not self.vehicle_in_north_side() and not self.point_in_north_side(point):
+            return True
+        else:
+            return False
+
+    def reset_nav_and_dir(self):
+        assert len(self.nav_points) >= 2, "The nav_points list must have at least two points."
+        self.nav = 1    # curr nav point
+        self.old_nav_point = self.nav_points[self.nav - 1]
+        self.curr_nav_point = self.nav_points[self.nav]
+        self.dir = (self.curr_nav_point - self.old_nav_point) / np.linalg.norm(self.curr_nav_point - self.old_nav_point)
+
+    # 为returning_to_depot过程分配导航点
+    def assign_return_depot_nav_points(self):
+        assert self.nav_points == [], "Cannot assign nav points when former task has not finished."
+        if np.all(self.pos == self.field.depot):     # 如果当前就在depot，直接return
+            self.returning_to_depot = False
+            return
+        self.returning_to_depot = True
+        self.add_nav_point(self.pos)
+        if self.in_same_side(self.field.depot_nav_point):
+            self.add_nav_point(self.field.depot_nav_point)
+        else:
+            self.add_nav_point(self.field.depot_nav_point_ops)
+        self.add_nav_point(self.field.depot)
+        self.reset_nav_and_dir()
+
+    # 为searching_for_harv分配导航点
+    def assign_search_nav_points(self, harv: Harvester):
+        assert self.serving_harv == None, "Cannot do tasks while other tasks is doing"
+        assert self.nav_points == [], "Cannot assign nav points when former task has not finished."
+        if harv.chosen or harv.cur_working_line == -1:
+            # 收割机已经被选择，或者刚开始工作，或者已经完成所有作业返回仓库，则不进行转运。保证收割机的 nav >= 2
+            # print("Current harvester has just started or has completed task.")
+            self.searching_for_harv = False
+            self.serving_harv = None
+            harv.chosen = False
+            return
+        assert harv.nav >= 2, "Strange case ???"
+        self.searching_for_harv = True
+        self.serving_harv = harv
+        harv.chosen = True
+        self.add_nav_point(self.pos)    # 每次调运任务结束都保证运粮车在地头导航点
+        if np.all(self.pos == self.field.depot):
+            self.add_nav_point(self.field.depot_nav_point)  # 如果出发是在机库，加入机库导航点
+        harv_old_nav_point = harv.old_nav_point
+        harv_curr_nav_point = harv.curr_nav_point
+        # 当前位置和收割机上一个导航点在同侧，则依此加入上一个和当前导航点
+        if self.in_same_side(harv_old_nav_point):  
+            self.add_nav_point(harv_old_nav_point)
+            self.add_nav_point(harv_curr_nav_point)
+            # 再多加上两个导航点
+            if harv.nav + 1 < len(harv.nav_points):
+                self.add_nav_point(harv.nav_points[harv.nav + 1])
+            if harv.nav + 2 < len(harv.nav_points):
+                self.add_nav_point(harv.nav_points[harv.nav + 2])
+        # old_nav_point的上一个导航点和农机在同侧，则加入上一个导航点
+        elif harv.nav - 2 >= 0 and self.in_same_side(harv.nav_points[harv.nav - 2]):
+            self.add_nav_point(harv.nav_points[harv.nav - 2])
+            self.add_nav_point(harv_old_nav_point)
+            self.add_nav_point(harv_curr_nav_point)
+            if harv.nav + 1 < len(harv.nav_points):
+                self.add_nav_point(harv.nav_points[harv.nav + 1])
+            if harv.nav + 2 < len(harv.nav_points):
+                self.add_nav_point(harv.nav_points[harv.nav + 2])
+            if harv.nav + 3 < len(harv.nav_points):
+                self.add_nav_point(harv.nav_points[harv.nav + 3])
+        # old_nav_point的上两个个导航点和农机在同侧，则加入导航点
+        elif harv.nav >= 3 and self.in_same_side(harv.nav_points[harv.nav - 3]):
+            self.add_nav_point(harv.nav_points[harv.nav - 3])
+            self.add_nav_point(harv.nav_points[harv.nav - 2])
+            self.add_nav_point(harv_old_nav_point)
+            self.add_nav_point(harv_curr_nav_point)
+            if harv.nav + 1 < len(harv.nav_points):
+                self.add_nav_point(harv.nav_points[harv.nav + 1])
+            if harv.nav + 2 < len(harv.nav_points):
+                self.add_nav_point(harv.nav_points[harv.nav + 2])
+            if harv.nav + 3 < len(harv.nav_points):
+                self.add_nav_point(harv.nav_points[harv.nav + 3])
+            if harv.nav + 4 < len(harv.nav_points):
+                self.add_nav_point(harv.nav_points[harv.nav + 4])
+        else:
+            self.searching_for_harv = False
+            self.serving_harv = None
+            self.nav_points = []
+            harv.chosen = False
+            # print("STRANGE CASE")
+            return
+        
+        self.reset_nav_and_dir()
+        return
+    
+    def in_head_lines(self):
+        p1 = self.field.vertices[0] + np.array([0, self.field.headland_width / 2])
+        p2 = self.field.vertices[3] + np.array([0, self.field.headland_width / 2])
+        a1 = p1 - self.pos
+        a2 = p2 - self.pos
+        if np.cross(a1, a2) == 0:
+            return True
+        p3 = self.field.vertices[1] - np.array([0, self.field.headland_width / 2])
+        p4 = self.field.vertices[2] - np.array([0, self.field.headland_width / 2])
+        a3 = p3 - self.pos
+        a4 = p4 - self.pos
+        if np.cross(a3, a4) == 0:
+            return True
+        return False
+    
+    def assign_return_head_nav_points(self):
+        assert self.nav_points == [], "Cannot assign nav points when former task has not finished."
+        if self.in_head_lines():
+            self.returning_to_headland = False
+            return
+        self.returning_to_headland = True
+        self.add_nav_point(self.pos)
+        self.add_nav_point(self.last_nav_point)
+        self.reset_nav_and_dir()
 
     def update_state(self):
-        if self.transporting:
-            self.empty = False
-            self.load = min(self.capacity, self.load + self.transporting_speed * self.dt)
-            if self.load == self.capacity:
-                self.full = True
+        self.check_dispatching()
+
+        old_total_trip = self.total_trip
+        old_trans_time = self.trans_times
+        if self.searching_for_harv:
+            assert self.serving_harv != None, "The harvester must be provided."
+            assert len(self.nav_points) >= 2, "The nav_points list must have at least two points."
+            pred_new_pos = self.pos + self.dir * self.dt * self.speed
+            self.total_trip += self.dt * self.speed # 增加总路程
+            while (pred_new_pos - self.old_nav_point) @ (pred_new_pos - self.curr_nav_point) > 0: 
+                left_dis = np.linalg.norm(pred_new_pos - self.curr_nav_point)
+                self.nav += 1
+                if self.nav == len(self.nav_points):    # 轨迹结束都没有找到收割机，返回
+                    self.pos =self.nav_points[-1]
+                    print("Cannot find the harvester!!")
+                    self.nav_points = []
+                    self.searching_for_harv = False
+                    # self.returning_to_headland = True
+                    self.serving_harv.chosen = False
+                    self.serving_harv = None
+                    return
+                self.curr_nav_point = self.nav_points[self.nav]
+                self.old_nav_point = self.nav_points[self.nav - 1]
+                self.dir = (self.curr_nav_point - self.old_nav_point) / np.linalg.norm(self.curr_nav_point - self.old_nav_point)
+                pred_new_pos = self.old_nav_point + left_dis * self.dir
+            self.pos = pred_new_pos
+            # 判断是否找到收割机
+            if np.linalg.norm(self.pos - self.serving_harv.pos) < self.pos_error:
+                self.nav_points = []
+                self.searching_for_harv = False
+                self.transporting = True
+                self.last_nav_point = self.old_nav_point
+                # self.assign_return_head_nav_points()
+                if self.serving_harv.able_to_trans and self.load_percent != 1.0:
+                    self.trans_times += 1
+
+        elif self.transporting:
+            assert self.serving_harv != None, "The harvester must be provided."
+            if self.serving_harv.able_to_trans and self.load_percent != 1.0:
+                self.serving_harv.has_a_trans = True
+                self.load = min(self.capacity, self.load + self.transporting_speed * self.dt)
+                self.load_percent = self.load / self.capacity
+            elif self.serving_harv.able_to_trans == False:   # 收割机空了，或者本身就因为间隔太短无法卸粮食
+                self.serving_harv.has_a_trans = False
+                self.serving_harv.chosen = False
+                self.serving_harv = None
+                self.transporting = False
+                self.assign_return_head_nav_points()
+            else:   # self.load_percentage == 1.0，在这里可以加负的奖励
+                self.serving_harv.has_a_trans = False
+                self.serving_harv.chosen = False
+                self.serving_harv = None
+                self.transporting = False
+                self.assign_return_head_nav_points()
+
+        elif self.returning_to_headland:
+            assert self.serving_harv == None, "No harvester should be provided."
+            assert len(self.nav_points) >= 2, "The nav_points list must have at least two points."
+            pred_new_pos = self.pos + self.dir * self.dt * self.speed
+            self.total_trip += self.dt * self.speed
+            while (pred_new_pos - self.old_nav_point) @ (pred_new_pos - self.curr_nav_point) > 0:  # 不支持连续一个time step拐弯多次，要设置dt足够小。
+                left_dis = np.linalg.norm(pred_new_pos - self.curr_nav_point)
+                self.nav += 1
+                if self.nav == len(self.nav_points):    # 结束导航
+                    self.pos =self.nav_points[-1]
+                    self.nav_points = []
+                    self.returning_to_headland = False
+                    return
+                self.curr_nav_point = self.nav_points[self.nav]
+                self.old_nav_point = self.nav_points[self.nav - 1]
+                self.dir = (self.curr_nav_point - self.old_nav_point) / np.linalg.norm(self.curr_nav_point - self.old_nav_point)
+                pred_new_pos = self.old_nav_point + left_dis * self.dir
+            self.pos = pred_new_pos
+
+        elif self.returning_to_depot:
+            assert len(self.nav_points) >= 2, "The nav_points list must have at least two points."
+            pred_new_pos = self.pos + self.dir * self.dt * self.speed
+            self.total_trip += self.dt * self.speed # 增加总行程
+            while (pred_new_pos - self.old_nav_point) @ (pred_new_pos - self.curr_nav_point) > 0: 
+                left_dis = np.linalg.norm(pred_new_pos - self.curr_nav_point)
+                self.nav += 1
+                if self.nav == len(self.nav_points):    # 结束导航
+                    self.pos =self.nav_points[-1]
+                    self.nav_points = []
+                    self.returning_to_depot = False
+                    self.unloading = True
+                    return
+                self.curr_nav_point = self.nav_points[self.nav]
+                self.old_nav_point = self.nav_points[self.nav - 1]
+                self.dir = (self.curr_nav_point - self.old_nav_point) / np.linalg.norm(self.curr_nav_point - self.old_nav_point)
+                pred_new_pos = self.old_nav_point + left_dis * self.dir
+            self.pos = pred_new_pos
+
         elif self.unloading:
-            self.full = False
-            self.load = max(0, self.load - self.unloading_speed * self.dt)
-            if self.load == 0:
-                self.empty = True
+            assert np.all(self.pos == self.field.depot), "The harvester is not in the depot!"
+            self.load = max(0, self.load - self.transporting_speed * self.dt)
+            self.load_percent = self.load / self.capacity
+            if self.load_percent == 0:
+                self.unloading = False
+
+        self.new_trip_len = self.total_trip - old_total_trip
+        self.new_trans_times = self.trans_times - old_trans_time
+        # else:
+        #     return
         
-        if np.linalg.norm(self.vel) > self.max_velocity:
-            self.vel = self.max_velocity * self.vel / np.linalg.norm(self.vel)
-        self.pos += self.vel * self.dt
-        self.load_percent = self.load / self.capacity
+    def check_dispatching(self):
+        if self.searching_for_harv or self.transporting or self.returning_to_headland or self.returning_to_depot or self.unloading:
+            self.has_dispatch_task = True
+        else:
+            self.has_dispatch_task = False
+    
+    def set_action(self, action, harv = None):
+        self.check_dispatching()
+        # 如果有调运任务，直接返回
+        if self.has_dispatch_task:
+            return
+        # action == 0, 不采取任何动作
+        if action == 0: 
+            return
+        # action == 1， 返回depot卸载粮食
+        elif action == 1:   #1，前往depot卸载粮食
+            self.assign_return_depot_nav_points()
+        # action >= 2，前往其它收割机卸载粮食
+        elif action >= 2: 
+            self.assign_search_nav_points(harv)
+            # 设置转运成本
             
 # multi-agent world
 class World(object):
-    def __init__(self, args, field):
+    def __init__(self, args):
         # farm properties
         self.world_step = 0
-        self.field = field
 
+        self.color_list = np.array([[1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+        [1, 0.6, 0.34],
+        [1, 0, 1],
+        [0, 1, 1],
+        [0, 0, 0], 
+        [1, 0.5, 0],
+        [1, 0.9, 0.8]  ])
+
+        self.dt = args.dt
+        self.decision_dt = args.decision_dt
+        self.wait_time_factor = args.wait_time_factor
+        self.distance_factor = args.distance_factor
+        self.trans_times_factor = args.trans_times_factor
         self.num_harvester = args.num_harvester
         self.num_transporter = args.num_transporter
 
-        self.dt = args.dt
         self.episode_length = args.episode_length
-
-        self.d_range = args.d_range
         self.shared_reward = args.shared_reward
 
-        self.transporting_speed = args.transporting_speed
+        self.harv_vmin = args.harv_vmin
+        self.harv_vmax = args.harv_vmax
+        self.harv_capmin = args.harv_capmin
+        self.harv_capmmax = args.harv_capmax
+        self.trans_vmin = args.trans_vmin
+        self.trans_vmax = args.trans_vmax
+        self.trans_capmin = args.trans_capmin
+        self.trans_capmax = args.trans_capmax
 
-        self.dim_color = 3
-        self.dim_c = 2
+        x0 = np.random.randint(-80, -40)
+        x1 = np.random.randint(40, 80)
+        y0 = np.random.randint(-200, -150)
+        y1 = np.random.randint(150, 200)
+        y2 = np.random.randint(150, 200)
+        y3 = np.random.randint(-200, -150)
+        vertices = np.array([[x0, y0], [x0, y1], [x1, y2], [x1, y3]])
+        self.field = FieldIr(vertices)
 
-        assert len(args.harvester_max_v) == args.num_harvester and len(args.cap_harvester) == args.num_harvester, "Harvesters speed or cap not right"
-        assert len(args.transporter_max_v) == args.num_transporter and len(args.cap_transporter) == args.num_transporter, "Transporters speed or cap not right"
-        self.harvesters = [Harvester(args, field, args.harvester_max_v[i], args.cap_harvester[i]) for i in range(self.num_harvester)]
-        self.transporters = [Transporter(args, field, args.transporter_max_v[i], args.cap_transporter[i]) for i in range(self.num_transporter)]
+        self.harvesters = [Harvester(field=self.field, speed=np.random.uniform(self.harv_vmin, self.harv_vmax), \
+                                     capacity=int(np.random.uniform(self.harv_capmin, self.harv_capmmax)) * 100, \
+                                     dt = self.dt) for i in range(self.num_harvester)]
+        self.transporters = [Transporter(field=self.field, speed=np.random.uniform(self.trans_vmin, self.trans_vmax), \
+                                         capacity=int(np.random.uniform(self.trans_capmin, self.trans_capmax)) * 100, \
+                                         dt = self.dt) for i in range(self.num_transporter)]
         for i, harv in enumerate(self.harvesters):
-            harv.i = i
+            harv.id = i
             harv.name = 'harvester %d' % i
         for j, harv in enumerate(self.transporters):
-            harv.i = j + self.num_harvester
+            harv.id = j + self.num_harvester
             harv.name = 'transporter %d' % j
+        self.assign_agent_colors()
+
+    def reset(self):
+        self.field = None
+        self.harvesters.clear()
+        self.transporters.clear()
+        self.world_step = 0
+
+        x0 = np.random.randint(-80, -40)
+        x1 = np.random.randint(40, 80)
+        y0 = np.random.randint(-200, -140)
+        y1 = np.random.randint(140, 200)
+        y2 = np.random.randint(140, 200)
+        y3 = np.random.randint(-200, -140)
+        vertices = np.array([[x0, y0], [x0, y1], [x1, y2], [x1, y3]])
+        self.field = FieldIr(vertices)
+
+        self.harvesters = [Harvester(field=self.field, speed=np.random.uniform(self.harv_vmin, self.harv_vmax), \
+                                     capacity=int(np.random.uniform(self.harv_capmin, self.harv_capmmax)) * 100, \
+                                     dt = self.dt) for _ in range(self.num_harvester)]
+        self.transporters = [Transporter(field=self.field, speed=np.random.uniform(self.trans_vmin, self.trans_vmax), \
+                                         capacity=int(np.random.uniform(self.trans_capmin, self.trans_capmax)) * 100, \
+                                         dt = self.dt) for _ in range(self.num_transporter)]
+        for i, harv in enumerate(self.harvesters):
+            harv.id = i
+            harv.name = 'harvester %d' % i
+        for j, harv in enumerate(self.transporters):
+            harv.id = j + self.num_harvester
+            harv.name = 'transporter %d' % j
+        self.assign_agent_colors()
         
-    def assign_agent_colors(self):
-        # harv_colors = [(0.25, 0.75, 0.25)] * self.num_harvester
-        # for color, agent in zip(harv_colors, self.harvesters):
-        #     agent.color = color
-
-        # trans_colors = [(0.75, 0.25, 0.25)] * self.num_transporter
-        # for color, agent in zip(trans_colors, self.transporters):
-        #     agent.color = color
-        for harv in self.harvesters:
-            harv.color = np.random.rand(3)
-
-        for trans in self.transporters:
-            trans.color = np.random.rand(3)
+    def assign_agent_colors(self, color_mode="random"):
+        if color_mode == "fixed":
+            harv_colors = [(0.25, 0.75, 0.25)] * self.num_harvester
+            for color, agent in zip(harv_colors, self.harvesters):
+                agent.color = color
+            trans_colors = [(0.75, 0.25, 0.25)] * self.num_transporter
+            for color, agent in zip(trans_colors, self.transporters):
+                agent.color = color
+        elif color_mode == "random":
+            i = 0
+            for harv in self.harvesters:
+                harv.color = self.color_list[i % len(self.color_list)]
+                i += 1
+            for trans in self.transporters:
+                trans.color = self.color_list[i % len(self.color_list)]
+                i += 1
+        else:
+            raise NotImplementedError
 
     # update state of the world
     def step(self):
-        # zoe 20200420
         self.world_step += 1
-
-        for harv in self.harvesters:
-            harv.transporting = False
-        for trans in self.transporters:
-            trans.transporting = False
-            trans.transporting_speed = self.transporting_speed
-
-        d_mat = np.zeros((self.num_transporter, self.num_harvester))
-        for i, trans in enumerate(self.transporters):
-            for j, harv in enumerate(self.harvesters):
-                d_mat[i,j] = np.linalg.norm(harv.pos - trans.pos)
-                # print("pos: ", harv.pos, trans.pos)
-        # print(d_mat)
-
-        for i, trans in enumerate(self.transporters):
-            for j, harv in enumerate(self.harvesters):
-                if d_mat[i, j] < self.d_range and not trans.full:
-                    trans.transporting = True
-                    harv.transporting = True
-                    if harv.load == 0:
-                        if harv.in_harvest_field():
-                            trans.transporting_speed = harv.yeild_per_meter * harv.speed
-                        else:
-                            trans.transporting = False
-                            harv.transporting = False
-                            trans.transporting_speed = 0
-            
-            if np.linalg.norm(trans.pos - self.field.depot) < self.d_range and not trans.empty:
-                trans.unloading = True
-            else:
-                trans.unloading = False
-
         for harv in self.harvesters:
             harv.update_state()
         for trans in self.transporters:
             trans.update_state()
                 
+def test_harv():
+    # field = Field(field_length=500, field_width=50, working_width=3.2, depot_pos="random")
+    field = Field(depot_pos="random")
+    print(field.depot, field.depot_nav_point, field.depot_nav_point_ops)
+    print(field.nav_points)
+    har1 = Harvester(field)
+    har1.reset_harv(working_lines=[2,3,4])
+    print(har1.nav_points)
+    for i in range(5600):
+        if i % 10 == 0: # 每隔一秒打印一次位置
+            state = har1.get_state()
+            print(i, state)
+            print(i, har1.pos, har1.load, har1.time, har1.last_trans_time, har1.able_to_trans, har1.cur_working_line)
+        har1.update_state()
+    har1.has_a_trans = True
+    for i in range(400):
+        if i % 10 == 0: 
+            print(i, har1.pos, har1.load, har1.time, har1.last_trans_time, har1.able_to_trans, har1.cur_working_line)
+        har1.update_state()
+    # har1.has_a_trans = False
+    # for i in range(5000):
+    #     if i % 10 == 0:
+    #         print(i, har1.pos, har1.load, har1.time, har1.last_trans_time, har1.able_to_trans, har1.cur_working_line)
+    #     har1.update_state()
+
+def test_trans():
+    # field = Field(field_length=500, field_width=50, working_width=3.2, depot_pos="random")
+    field = Field(depot_pos="random")
+    # print(field.depot, field.depot_nav_point, field.depot_nav_point_ops)
+    # print(field.nav_points)
+    har1 = Harvester(field)
+    har1.reset_harv(working_lines=[2,3,4])
+    print(har1.nav_points)
+    for i in range(5600):
+        # if i % 10 == 0: # 每隔一秒打印一次位置
+            # print(i, har1.pos, har1.load, har1.time, har1.last_trans_time, har1.able_to_trans, har1.cur_working_line)
+        har1.update_state()
+    har1.has_a_trans = True
+    for i in range(400):
+        # if i % 10 == 0: 
+            # print(i, har1.pos, har1.load, har1.time, har1.last_trans_time, har1.able_to_trans, har1.cur_working_line)
+        har1.update_state()
+    har1.has_a_trans = False
+
+    print(har1.nav, har1.old_nav_point, har1.curr_nav_point, har1.pos)
+    trans1 = Transporter(field)
+    trans1.assign_search_nav_points(har1)
+    print(trans1.nav_points)
+    print(trans1.get_state())
+
+def test_field_ir():
+    vertices = np.array([[0,-5], [0,50], [31, 110.5], [31, -20]])
+    field = FieldIr(vertices)
+    print(field.nav_points)
+
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(
-        description='ia', formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--scenario_name', type=str,
-                        default='ia_simple', help="Which scenario to run on")
-    parser.add_argument("--num_harvester", type=int, default=3, help="number of harvesters")
-    parser.add_argument('--num_transporter', type=int,
-                        default=2, help="number of transporters")
-    
-    # environment settings
-    parser.add_argument('--dt', type=float, default=0.1, help="simulation interval")
-    parser.add_argument("--episode_length", type=int, default=100)  
-    
-    # Field settings
-    parser.add_argument("--field_width", type=float, default=100.0, help="width of the farmland")
-    parser.add_argument("--field_length", type=float, default=500.0, help="length of the farmland")
-    parser.add_argument("--working_width", type=float, default=10.0, help="working width of the harvester")
-    parser.add_argument("--headland_width", type=float, default=3.0, help="width of the headland")
-    parser.add_argument("--ridge_width", type=float, default=0.3, help="width of the ridge")
-
-    # Harvester parameters
-    parser.add_argument("--yeild_per_meter", type=float, default=1.5, help="yeild of the harvester per meter")
-    parser.add_argument("--transporting_speed", type=float, default=10.0, help="transporting speed of the harvester per second")
-    parser.add_argument("--harvester_max_v", nargs='+', help='<Required> The maximum velocity of each harvester', required=True)
-    parser.add_argument("--cap_harvester", nargs='+', help='<Required> The load capacity of each harvester', required=True) 
-
-    # Transpoter parameters
-    parser.add_argument("--unloading_speed", type=float, default=30.0, help="unloading speed of the transporter to the depot per second")
-    parser.add_argument("--transporter_max_v", nargs='+', help='<Required> The maximum velocity of each transporter', required=True)  
-    parser.add_argument("--cap_transporter", nargs='+', help='<Required> The load capacity of each harvester', required=True)
-    
-    # Other settings
-    parser.add_argument("--shared_reward", action='store_false', default=True, help='Whether agent share the same rewadr')
-    parser.add_argument("--d_range", type=float, default=1.0, help="the distance between the harv and trans to transporting")
-
-    all_args = parser.parse_known_args()[0]
-    field = Field(all_args)
-    # harv1 = Harvester(all_args, field, all_args.harvester_max_v[0], all_args.cap_harvester[0])
-    # harv1.assign_nav_points(np.array([0,3,2,1]), 0)
-    # for i in range(100):
-    #     harv1.update_state()
-    #     print("step:", i, harv1.pos, "moving:", harv1.moving, "\tfull:", harv1.full, "\ttrasporting:", 
-    #           harv1.transporting, "\tload:", harv1.load, "\tin field: ",harv1.in_harvest_field(), "\tload percentage: ", harv1.load_percent)
-    # harv1.transporting = True
-    # for i in range(100):
-    #     harv1.update_state()
-    #     print("step:", i, harv1.pos, "moving:", harv1.moving, "\tfull:", harv1.full, "\ttrasporting:", 
-    #           harv1.transporting, "\tload:", harv1.load, "\tin field: ",harv1.in_harvest_field(), "\tload percentage: ", harv1.load_percent)
-
-    # trans1 = Transporter(all_args, field, all_args.transporter_max_v[0], all_args.cap_transporter[0])
-    # trans1.vel = np.array([2.0, 3.0])
-    # trans1.transporting = True
-    # for i in range(150):
-    #     trans1.update_state()
-    #     print("step:", i, trans1.pos, "empty:", trans1.empty, "\tfull:", trans1.full, "\ttrasporting:", 
-    #           trans1.transporting, "\tunloading: ",trans1.unloading, "\tload:", trans1.load, "\tload percentage: ", trans1.load_percent)
-
-    world = World(all_args, field)
-    for i in range(all_args.num_harvester):
-        print(world.harvesters[i].speed, world.harvesters[i].capacity)
-    for i in range(all_args.num_transporter):
-        print(world.transporters[i].vel, world.transporters[i].capacity)
-    world.harvesters[0].assign_nav_points(np.array([0,3,2,1]), 0)
-    for i in range(100):
-        world.harvesters[0].update_state()
-        print("step:", i, world.harvesters[0].pos, "moving:", world.harvesters[0].moving, "\tfull:", world.harvesters[0].full, "\ttrasporting:", 
-              world.harvesters[0].transporting, "\tload:", world.harvesters[0].load, "\tin field: ",world.harvesters[0].in_harvest_field(), "\tload percentage: ", world.harvesters[0].load_percent)
-    # world.harvesters[0].assign_nav_points(np.array([0,3,2,1]), 0)
-    # world.harvesters[1].assign_nav_points(np.array([4,5,6]), 1)
-    # world.harvesters[2].assign_nav_points(np.array([7,8,9]), 0)
-    # world.transporters[0].vel = np.array([0.0,3.0])
-    # world.transporters[0].init_pos(np.array([0.5, 1.5]))
-    # print("nav potins: ", field.nav_points)
-    # print("nav potins 0: ", field.nav_points[0,0,:])
-    # print("nav points shape: ", field.nav_points.shape)
-    # print("ridges: ", field.ridges)
-    # print("ridges shape: ", field.ridges.shape)
-    # print(field.working_line_length)
-    # hav1 = Harvester(all_args, field, 0, [0,3,2])
-    # print("navigation points:", world.harvesters[0].nav_points)
-    # print(hav1.dir)
-    # for i in range(200):
-        # world.harvesters[0].update_state()
-        # world.step()
-        # print("step:", i, world.harvesters[0].pos, "moving:", world.harvesters[0].moving, "\tfull:", world.harvesters[0].full, "\ttrasporting:", world.harvesters[0].transporting, "\tload:", world.harvesters[0].load, "\tin field: ",world.harvesters[0].in_harvest_field())
-        # print("step:", i, world.transporters[0].pos, "transporting speed:", world.transporters[0].transporting_speed, "load:", world.transporters[0].load, "\tfull:", world.transporters[0].full, "\ttrasporting:", world.transporters[0].transporting, "\tunloading:", world.transporters[0].unloading, "\tempty ",world.transporters[0].empty)
-    # world.harvesters[0].transporting = True
-    # for i in range(100):
-        # world.harvesters[0].update_state()
-        # print(i, world.harvesters[0].pos, "moving:", world.harvesters[0].moving, "\tfull:", world.harvesters[0].full, "\ttrasporting:", world.harvesters[0].transporting, "\tload:", world.harvesters[0].load, "\tin field: ",world.harvesters[0].in_harvest_field())
-        # print(i, hav1.pos, "moving:", hav1.moving, "\tfull:", hav1.full, "\ttrasporting:", hav1.transporting, "\tload:", hav1.load, "\tin field: ",hav1.in_harvest_field())
-    # world.harvesters[0].transporting = False
-    # for i in range(100):
-    #     world.harvesters[0].update_state()
-        # print(i, world.harvesters[0].pos, "moving:", world.harvesters[0].moving, "\tfull:", world.harvesters[0].full, "\ttrasporting:", world.harvesters[0].transporting, "\tload:", world.harvesters[0].load, "\tin field: ",world.harvesters[0].in_harvest_field())
-       
-    # trans1 = Transporter(all_args, field, [1.0,2.0])
-    # trans1.vel = np.array([0.5,0.6])
-    # for _ in range(100):
-    #     trans1.update_state()
-    #     print(trans1.pos)
-    # world.transporters[0].vel = np.array([0.5,0.6])
-    # world.transporters[0].init_pos(np.array([1.0, 2.0]))
-    # for _ in range(100):
-    #     world.transporters[0].update_state()
-    #     print(world.transporters[0].pos)
+    # test_harv()
+    # test_trans()
+    test_field_ir()

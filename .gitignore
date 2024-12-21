@@ -1,5 +1,6 @@
 __pycache__
 results
+render
 *.pyc
 /gifs/
 build
@@ -16,3 +17,7 @@ logs
 *.so
 render
 temp
+*.mp4
+*.gif
+temp
+figplot

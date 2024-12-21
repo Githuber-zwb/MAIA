@@ -62,6 +62,8 @@ class MPERunner(Runner):
                 if self.env_name == "IA":
                     env_infos = {}
                     for agent_id in range(self.num_agents):
+                        # train_infos[agent_id].update({"average_episode_rewards": np.mean(\
+                        #     self.buffer[agent_id].rewards) * self.episode_length})
                         idv_rews = []
                         for info in infos:
                             if 'individual_reward' in info[agent_id].keys():
