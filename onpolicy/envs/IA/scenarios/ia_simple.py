@@ -39,13 +39,20 @@ class Scenario(BaseScenario):
         self_state = trans.get_state()
         # print(self_state)
         harv_states = []
+        other_trans_states = []
         for harv in world.harvesters:
             harv_state = harv.get_state()
             harv_states.append(harv_state)
+        for t, other_trans in enumerate(world.transporters):
+            if other_trans.id != trans.id:
+                other_trans_state = other_trans.get_state()
+                other_trans_states.append(other_trans_state)
+        assert t == world.num_transporter - 1
         harv_states = np.array(harv_states).reshape(-1)
+        other_trans_states = np.array(other_trans_states).reshape(-1)
         # print(harv_states)
         # print(np.concatenate([self_state, harv_states]))
-        return np.concatenate([np.array(world.field.depot) / 100, self_state, harv_states])
+        return np.concatenate([world.field.vertices.reshape(-1) / 100, world.field.depot / 100, self_state, other_trans_states, harv_states])
     
     def done(self, world):
         flag = []

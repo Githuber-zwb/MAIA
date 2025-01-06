@@ -4,6 +4,7 @@ import torch
 from onpolicy.runner.shared.base_runner import Runner
 import wandb
 import imageio
+import copy
 
 def _t2n(x):
     return x.detach().cpu().numpy()
@@ -70,9 +71,16 @@ class IARunner(Runner):
                                 idv_rews.append(info[agent_id]['individual_reward'])
                         agent_k = 'agent%i/individual_rewards' % agent_id
                         env_infos[agent_k] = idv_rews
-
-                train_infos["average_episode_rewards"] = np.mean(self.buffer.rewards) * self.episode_length
-                print("average episode rewards is {}".format(train_infos["average_episode_rewards"]))
+                if self.all_args.shared_reward:
+                    train_infos["average_episode_rewards"] = np.mean(self.buffer.rewards) * self.episode_length
+                    print("average episode rewards is {}".format(train_infos["average_episode_rewards"]))
+                else:
+                    tmp_rewards = copy.deepcopy(self.buffer.rewards)
+                    agent_aver_reward = np.mean(np.mean(tmp_rewards, axis=0), axis=0).squeeze(-1)
+                    for ag in range(self.num_agents):
+                        train_infos["average_episode_rewards_{}".format(ag)] = agent_aver_reward[ag] * self.episode_length
+                    train_infos["average_episode_rewards"] = np.mean(agent_aver_reward) * self.episode_length
+                    print("average episode rewards is {}".format(np.mean(agent_aver_reward) * self.episode_length))
                 self.log_train(train_infos, total_num_steps)
                 self.log_env(env_infos, total_num_steps)
 

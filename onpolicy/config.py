@@ -316,7 +316,7 @@ def get_config():
     
     # environment settings
     parser.add_argument('--dt', type=float, default=0.1, help="simulation interval")
-    parser.add_argument('--decision_dt', type=float, default=1.0, help="decision interval")
+    parser.add_argument('--decision_dt', type=float, default=10.0, help="decision interval")
     # Other settings
     parser.add_argument("--shared_reward", action='store_true', default=False, help='Whether agent share the same rewadr')
     parser.add_argument('--wait_time_factor', type=float, default=10.0, help="wait time factor")

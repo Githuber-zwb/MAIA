@@ -218,15 +218,18 @@ if __name__ == "__main__":
     # print(len(np.where(a == 2)[0]))
 
 
-    A = np.array([1,2,3,-1,5,4,-1,6,9,7,8,10,-1])
-    B = np.array([9,7,8,-1,5,4,6,-1,1,2,3,-1,2])
+    # A = np.array([1,2,3,-1,5,4,-1,6,9,7,8,10,-1])
+    # B = np.array([9,7,8,-1,5,4,6,-1,1,2,3,-1,2])
 
-    ids = np.where(B==-1)[0]
-    index = np.where(ids==7)[0]
-    assert len(index) == 1
-    index = index[0]
-    xs = np.where(A==-1)[0]
-    x = xs[index]
-    # print(x)
-    p1, p2 = np.random.randint(0, 10, 2)
-    print(p1, p2)
+    # ids = np.where(B==-1)[0]
+    # index = np.where(ids==7)[0]
+    # assert len(index) == 1
+    # index = index[0]
+    # xs = np.where(A==-1)[0]
+    # x = xs[index]
+    # # print(x)
+    # p1, p2 = np.random.randint(0, 10, 2)
+    # print(p1, p2)
+
+    a = np.arange(24).reshape(2,3,4,1)
+    print(np.mean(np.mean(a, axis=0), axis=0).squeeze(-1))

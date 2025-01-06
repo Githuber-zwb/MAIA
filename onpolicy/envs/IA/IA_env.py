@@ -64,6 +64,7 @@ if __name__ == "__main__":
             
         rewards_total = []
         for i in range(all_args.episode_length):
+            print(i)
             # print("step: ", i, ", environment step: ", env.world.world_step)
             # print(env.world.transporters[0].trans_times)
             # print(env.world.harvesters[0].new_wait_time)
@@ -92,8 +93,8 @@ if __name__ == "__main__":
             # image_list.append(img)
             if np.all(dones):
                 break
-            # if i % 100 == 0:
-            #     imageio.imsave(f"env_auto_trans_mode{i}.jpg", img)
+            # if i % 50 == 0:
+            #     imageio.imsave(f"figs/auto_trans_mode_time_{i}_{all_args.num_harvester}_{all_args.num_transporter}.jpg", img)
         rewards_total = np.sum(np.array(rewards_total), axis=0)
         print(rewards_total)
         reward_ls.append(np.mean(rewards_total))

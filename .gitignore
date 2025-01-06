@@ -18,4 +18,5 @@ logs
 *.mp4
 *.gif
 temp
-figplot
+fig_plot
+figs

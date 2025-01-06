@@ -244,6 +244,9 @@ class IAMultiAgentEnv(gym.Env):
             def render(self):
                 self.label.draw()
 
+        field_width = int(self.world.field.vertices[3][0] - self.world.field.vertices[0][0])
+        field_length = int(max(self.world.field.vertices[1][1], self.world.field.vertices[2][1]))
+
         if close:
             # close any existic renderers
             for i, viewer in enumerate(self.viewers):
@@ -261,8 +264,8 @@ class IAMultiAgentEnv(gym.Env):
                 from . import rendering
                 # self.viewers[i] = rendering.Viewer(600, 800)
                 # self.viewers[i].set_bounds(-300, 300, -100, 700)
-                self.viewers[i] = rendering.Viewer(320 * scale, 400 * scale)
-                self.viewers[i].set_bounds(-80 * scale, 240 * scale , -200 * scale, 200 * scale)
+                self.viewers[i] = rendering.Viewer((field_width + 150) * scale, (field_length + 40) * scale)
+                self.viewers[i].set_bounds(-20 * scale, (field_width + 130) * scale , -20 * scale, (field_length + 20) * scale)
 
         # create rendering geometry
         if self.render_geoms is None:
@@ -357,30 +360,30 @@ class IAMultiAgentEnv(gym.Env):
             self.text_geoms = []
             for h, harv in enumerate(self.world.harvesters):
                 label = pyglet.text.Label(f"Harvester {h}", font_size=10,
-                                x=120*scale, y=(180-h*20/scale)*scale , anchor_x='left', anchor_y='bottom',
+                                x=(field_width + 20)*scale, y=(field_length-h*20/scale)*scale , anchor_x='left', anchor_y='bottom',
                                 color=(0, 0, 0, 255))
                 label.draw()
                 self.text_geoms.append(DrawText(label))
                 acircle = rendering.make_circle(2 * scale, 30)
-                transl = rendering.Transform(translation=np.array([110*scale, (185-h*20/scale)*scale]))
+                transl = rendering.Transform(translation=np.array([(field_width + 10)*scale, (field_length + 5 -h*20/scale)*scale]))
                 acircle.set_color(*harv.color)
                 acircle.add_attr(transl)
                 self.render_geoms.append(acircle)
             for t, trans in enumerate(self.world.transporters):
                 label = pyglet.text.Label(f"Transporter {t}", font_size=10,
-                                x=120*scale, y=(180-(h+1)*20/scale-t*20/scale)*scale , anchor_x='left', anchor_y='bottom',
+                                x=(field_width + 20)*scale, y=(field_length-(h+1)*20/scale-t*20/scale)*scale , anchor_x='left', anchor_y='bottom',
                                 color=(0, 0, 0, 255))
                 label.draw()
                 self.text_geoms.append(DrawText(label))
                 acircle = rendering.make_circle(4 * scale, 30)
-                transl = rendering.Transform(translation=np.array([110*scale, (185-(h+1)*20/scale-t*20/scale)*scale]))
+                transl = rendering.Transform(translation=np.array([(field_width + 10)*scale, (field_length + 5-(h+1)*20/scale-t*20/scale)*scale]))
                 acircle.set_color(*trans.color)
                 acircle.add_attr(transl)
                 self.render_geoms.append(acircle)
             # add time 
             # print(self.current_step)
             label = pyglet.text.Label("Time: ", font_size=10,
-                            x=120*scale, y=(180-(h+1)*20/scale-(t+1)*20/scale)*scale , anchor_x='left', anchor_y='bottom',
+                            x=(field_width + 10)*scale, y=(field_length-(h+1)*20/scale-(t+1)*20/scale)*scale , anchor_x='left', anchor_y='bottom',
                             color=(0, 0, 0, 255))
             label.draw()
             self.text_geoms.append(DrawText(label))

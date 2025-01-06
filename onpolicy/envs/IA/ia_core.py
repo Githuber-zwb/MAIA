@@ -54,7 +54,9 @@ class FieldIr(object):
         assert vertices.shape == (4,2), "Wrong vertices shape!"  # 农场的四个顶点，分别是左下、左上、右上和右下顶点，需要保证左右两条边平行
         assert vertices[0][0] == vertices[1][0] and vertices[2][0] == vertices[3][0], "The edges must be parallel"
         assert vertices[0][1] < vertices[1][1] and vertices[2][1] > vertices[3][1]
-        self.vertices = vertices    # 农田的四个顶点
+        # 将农田的边平移到合适的位置
+        delta_val = np.array([vertices[0][0], min(vertices[0][1], vertices[3][1])])
+        self.vertices = vertices - delta_val   # 农田的四个顶点
         self.working_width = working_width  # 作业行宽度 (m)
         self.yeild_per_m2 = yeild_per_m2    # 单位面积产量 (kg/m2)
         self.headland_width = headland_width    # 地头宽度
@@ -275,7 +277,7 @@ class Transporter(object):
         # state = np.concatenate([[self.id], self.pos, self.dir, [self.capacity - self.load], [self.load_percent], \
         #                         [float(self.has_dispatch_task)], [float(self.returning_to_depot)], [float(self.unloading)], \
         #                         [float(self.searching_for_harv)], [float(self.transporting)], [float(self.returning_to_headland)]])
-        state = np.concatenate([[self.speed], np.array(self.pos) / 100, [(self.capacity - self.load) / 100], [float(self.has_dispatch_task)]])
+        state = np.concatenate([[self.id], [self.speed], np.array(self.pos) / 100, [(self.capacity - self.load) / 100], [float(self.has_dispatch_task)]])
         return state
 
     def add_nav_point(self, point):
@@ -552,15 +554,28 @@ class World(object):
         # farm properties
         self.world_step = 0
 
-        self.color_list = np.array([[1, 0, 0],
+        self.color_list = np.array([
+        [1, 0, 0],
         [0, 1, 0],
         [0, 0, 1],
         [1, 0.6, 0.34],
         [1, 0, 1],
         [0, 1, 1],
-        [0, 0, 0], 
+        [1, 0.9, 0], 
         [1, 0.5, 0],
-        [1, 0.9, 0.8]  ])
+        [1, 0.9, 0.8],
+        [1, 0.5, 0.5],
+        [0.097, 0.097, 0.437]
+        ])
+
+        self.harv_field_dict = {
+            2: (120, 300), 
+            3: (150, 400), 
+            4: (180, 450), 
+            5: (200, 500), 
+            6: (250, 550), 
+            7: (300, 650)
+        }
 
         self.dt = args.dt
         self.decision_dt = args.decision_dt
@@ -581,42 +596,23 @@ class World(object):
         self.trans_vmax = args.trans_vmax
         self.trans_capmin = args.trans_capmin
         self.trans_capmax = args.trans_capmax
+        self.field_width_max = self.harv_field_dict[args.num_harvester][0]
+        self.field_length_max = self.harv_field_dict[args.num_harvester][1]
 
-        x0 = np.random.randint(-80, -40)
-        x1 = np.random.randint(40, 80)
-        y0 = np.random.randint(-200, -150)
-        y1 = np.random.randint(150, 200)
-        y2 = np.random.randint(150, 200)
-        y3 = np.random.randint(-200, -150)
-        vertices = np.array([[x0, y0], [x0, y1], [x1, y2], [x1, y3]])
-        self.field = FieldIr(vertices)
-
-        self.harvesters = [Harvester(field=self.field, speed=np.random.uniform(self.harv_vmin, self.harv_vmax), \
-                                     capacity=int(np.random.uniform(self.harv_capmin, self.harv_capmmax)) * 100, \
-                                     dt = self.dt) for i in range(self.num_harvester)]
-        self.transporters = [Transporter(field=self.field, speed=np.random.uniform(self.trans_vmin, self.trans_vmax), \
-                                         capacity=int(np.random.uniform(self.trans_capmin, self.trans_capmax)) * 100, \
-                                         dt = self.dt) for i in range(self.num_transporter)]
-        for i, harv in enumerate(self.harvesters):
-            harv.id = i
-            harv.name = 'harvester %d' % i
-        for j, harv in enumerate(self.transporters):
-            harv.id = j + self.num_harvester
-            harv.name = 'transporter %d' % j
-        self.assign_agent_colors()
+        self.reset()
 
     def reset(self):
         self.field = None
-        self.harvesters.clear()
-        self.transporters.clear()
+        self.harvesters = None
+        self.transporters = None
         self.world_step = 0
 
-        x0 = np.random.randint(-80, -40)
-        x1 = np.random.randint(40, 80)
-        y0 = np.random.randint(-200, -140)
-        y1 = np.random.randint(140, 200)
-        y2 = np.random.randint(140, 200)
-        y3 = np.random.randint(-200, -140)
+        x0 = 0
+        x1 = np.random.randint(self.field_width_max - 60, self.field_width_max)
+        y0 = np.random.randint(0, 60)
+        y1 = np.random.randint(self.field_length_max - 60, self.field_length_max)
+        y2 = np.random.randint(self.field_length_max - 60, self.field_length_max)
+        y3 = np.random.randint(0, 60)
         vertices = np.array([[x0, y0], [x0, y1], [x1, y2], [x1, y3]])
         self.field = FieldIr(vertices)
 
@@ -629,9 +625,9 @@ class World(object):
         for i, harv in enumerate(self.harvesters):
             harv.id = i
             harv.name = 'harvester %d' % i
-        for j, harv in enumerate(self.transporters):
-            harv.id = j + self.num_harvester
-            harv.name = 'transporter %d' % j
+        for j, trans in enumerate(self.transporters):
+            trans.id = j + self.num_harvester
+            trans.name = 'transporter %d' % j
         self.assign_agent_colors()
         
     def assign_agent_colors(self, color_mode="random"):
@@ -712,9 +708,11 @@ def test_trans():
     print(trans1.get_state())
 
 def test_field_ir():
-    vertices = np.array([[0,-5], [0,50], [31, 110.5], [31, -20]])
+    vertices = np.array([[-5,-5], [-5,50], [31, 110.5], [31, -20]])
     field = FieldIr(vertices)
+    print(field.vertices)
     print(field.nav_points)
+    print(field.vertices.reshape(-1))
 
 
 if __name__ == "__main__":
