@@ -2,6 +2,9 @@ from onpolicy.envs.IA.environment import IAMultiAgentEnv
 from onpolicy.envs.IA.scenarios import load
 from onpolicy.envs.IA.scenarios.ia_simple import Scenario
 import imageio
+from matplotlib import pyplot as plt
+from onpolicy.envs.IA.ia_core import a_star, heuristic
+import numpy as np
 
 def IAEnv(args):
     '''
@@ -32,17 +35,19 @@ def IAEnv(args):
 
 if __name__ == "__main__":
     import argparse
-    import numpy as np
     import time
     from onpolicy.config import get_config
+    from onpolicy.envs.IA.utils import test_graph
 
-    # np.random.seed(7)
+    np.random.seed(7)
     parser = get_config()
     parser.add_argument('--scenario_name', type=str,
                         default='ia_simple', help="Which scenario to run on")
     parser.add_argument("--num_harvester", type=int, default=3, help="number of harvesters")
     parser.add_argument('--num_transporter', type=int,
                         default=2, help="number of transporters")
+    parser.add_argument('--test_graph',  action='store_true',
+                        default=False)
 
     all_args = parser.parse_known_args()[0]
     env = IAEnv(all_args)
@@ -65,11 +70,11 @@ if __name__ == "__main__":
         rewards_total = []
         for i in range(all_args.episode_length):
             print(i)
-            # print("step: ", i, ", environment step: ", env.world.world_step)
-            # print(env.world.transporters[0].trans_times)
-            # print(env.world.harvesters[0].new_wait_time)
-            # print(env.world.harvesters[1].new_wait_time)
-            # print("trans length: ", env.world.transporters[0].new_trip_len)
+            if all_args.test_graph and i % 300 == 0:
+                test_graph(env.world.field.graph)
+
+            for h, harv in enumerate(env.world.harvesters):
+                print(h, harv.cur_working_line)
 
             # auto trans mode
             actions = np.zeros([env.world.num_transporter, 1])
@@ -92,6 +97,8 @@ if __name__ == "__main__":
             img = env.render("rgb_array")[0]
             # image_list.append(img)
             if np.all(dones):
+                if all_args.test_graph:
+                    test_graph(env)
                 break
             # if i % 50 == 0:
             #     imageio.imsave(f"figs/auto_trans_mode_time_{i}_{all_args.num_harvester}_{all_args.num_transporter}.jpg", img)

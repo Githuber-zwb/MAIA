@@ -206,6 +206,111 @@ def isValid(s, startSec, endSec):
         startSec, endSec = startThird, endThird
     return False
 
+def pnpoly(vertices, testp):
+    n = len(vertices)
+    j = n - 1
+    res = False
+    for i in range(n):
+        if (vertices[i][1] > testp[1]) != (vertices[j][1] > testp[1]) and \
+                testp[0] < (vertices[j][0] - vertices[i][0]) * (testp[1] - vertices[i][1]) / (
+                vertices[j][1] - vertices[i][1]) + vertices[i][0]:
+            res = not res
+        j = i
+    return res
+
+
+import matplotlib.pyplot as plt
+import collections
+
+def plot_graph(graph):
+    """
+    Visualizes the graph using matplotlib.
+
+    :param graph: The graph represented as a defaultdict(list),
+                where keys are node coordinates (tuples) and values are lists of neighboring coordinates (tuples).
+    """
+    # Create a figure and axis for the plot
+    fig, ax = plt.subplots()
+
+    # Set the axis labels
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+
+    # Plot nodes as scatter points
+    for node in graph:
+        x, y = node  # Unpack the coordinates of the node
+        ax.scatter(x, y, c='blue', s=100, zorder=5)  # Plot the node (blue point)
+
+    # Plot edges as lines between connected nodes
+    for node, neighbors in graph.items():
+        for neighbor in neighbors:
+            x1, y1 = node
+            x2, y2 = neighbor
+            ax.plot([x1, x2], [y1, y2], c='gray', linestyle='-', linewidth=1, zorder=1)  # Plot edge (line)
+
+    # Set the aspect of the plot to be equal to ensure the nodes are not distorted
+    ax.set_aspect('equal', adjustable='box')
+
+    # Display the plot
+    plt.show()
+
+
+import heapq
+import collections
+import math
+
+# A* algorithm implementation
+def a_star(graph, start, target, heuristic):
+    # Priority queue for open set (using heapq for efficient min-heap)
+    open_set = []
+    heapq.heappush(open_set, (0 + heuristic(start, target), start))  # (f, node)
+
+    # Dictionary to store the shortest path from start to each node
+    came_from = {}
+
+    # g_score stores the cost of the path from start to the current node
+    g_score = {node: float('inf') for node in graph}
+    g_score[start] = 0
+
+    # f_score stores the estimated total cost from start to target through current node
+    f_score = {node: float('inf') for node in graph}
+    f_score[start] = heuristic(start, target)
+
+    while open_set:
+        # Get the node with the lowest f_score
+        _, current = heapq.heappop(open_set)
+
+        # If we reached the target, reconstruct the path
+        if current == target:
+            path = []
+            while current in came_from:
+                path.append(current)
+                current = came_from[current]
+            path.append(start)
+            path.reverse()
+            return path, f_score[target]
+
+        # Check each neighbor of the current node
+        for neighbor in graph[current]:
+            tentative_g_score = g_score[current] + euclidean_distance(current, neighbor)
+
+            if tentative_g_score < g_score[neighbor]:
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g_score
+                f_score[neighbor] = g_score[neighbor] + heuristic(neighbor, target)
+                heapq.heappush(open_set, (f_score[neighbor], neighbor))
+
+    return None, float('inf')  # If no path found
+
+# Euclidean distance between two points
+def euclidean_distance(a, b):
+    return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
+
+# Example heuristic: Euclidean distance for grid-based paths
+def heuristic(node, target):
+    return euclidean_distance(node, target)
+
+
 if __name__ == "__main__":
     # print(solve())
     import numpy as np
@@ -231,5 +336,38 @@ if __name__ == "__main__":
     # p1, p2 = np.random.randint(0, 10, 2)
     # print(p1, p2)
 
-    a = np.arange(24).reshape(2,3,4,1)
-    print(np.mean(np.mean(a, axis=0), axis=0).squeeze(-1))
+    # a = np.arange(24).reshape(2,3,4,1)
+    # print(np.mean(np.mean(a, axis=0), axis=0).squeeze(-1))
+
+
+    # Example graph (undirected)
+    graph = collections.defaultdict(list)
+
+    # Add edges (undirected graph)
+    graph[(0, 0)].append((1, 1))
+    graph[(0, 0)].append((1, 0))
+    graph[(1, 0)].append((0, 0))
+    graph[(1, 0)].append((2, 1))
+    graph[(1, 1)].append((0, 0))
+    graph[(1, 1)].append((2, 1))
+    graph[(2, 1)].append((1, 0))
+    graph[(2, 1)].append((1, 1))
+
+    # Test A* algorithm
+    start = (0, 0)
+    target = (2, 1)
+    path, cost = a_star(graph, start, target, heuristic)
+
+    print(f"Path: {path}")
+    print(f"Total cost: {cost}")
+
+    # # Example graph where nodes are represented by coordinates (tuples)
+    # graph = collections.defaultdict(list)
+    # graph[(0, 0)] = [(1, 1), (1, -1)]
+    # graph[(1, 1)] = [(0, 0), (2, 2)]
+    # graph[(1, -1)] = [(0, 0), (2, -2)]
+    # graph[(2, 2)] = [(1, 1)]
+    # graph[(2, -2)] = [(1, -1)]
+
+    # # Visualize the graph
+    # plot_graph(graph)

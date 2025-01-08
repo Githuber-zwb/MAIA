@@ -5,6 +5,7 @@ import numpy as np
 from .multi_discrete import MultiDiscrete
 from onpolicy.envs.IA.ia_core import World, Harvester, Transporter, Field
 import pyglet
+from onpolicy.envs.IA.utils import test_graph
 # import os
 # os.environ['DISPLAY'] = ':1'
 
@@ -108,6 +109,8 @@ class IAMultiAgentEnv(gym.Env):
                         for k in idx:
                             if not self.world.transporters[k].has_dispatch_task:
                                 self.world.transporters[k].set_action(2, self.world.harvesters[i])
+                                path = self.world.transporters[k].nav_points[:-4]
+                                test_graph(self.world.field.graph, path)
                                 break
         else:
             for i, agent in enumerate(self.world.transporters):
@@ -355,6 +358,16 @@ class IAMultiAgentEnv(gym.Env):
                 line.set_color(*harv.color, alpha=0.2)
                 line.set_linewidth(1 * scale)
                 self.render_geoms.append(line)
+            
+            # # test graph
+            # for node, ls in self.world.field.graph.items():
+            #     for n in ls:
+            #         tmp = np.array([node, n])
+            #         tmp = tmp * scale
+            #         line = rendering.make_polyline(tmp)
+            #         line.set_color(0,0,0)
+            #         line.set_linewidth(3 * scale)
+            #         self.render_geoms.append(line)
 
             # The text
             self.text_geoms = []
@@ -399,32 +412,6 @@ class IAMultiAgentEnv(gym.Env):
         for i in range(len(self.viewers)):
             from . import rendering
 
-            # # The whole field
-            # field = rendering.make_polygon([(0, 0), (self.world.field.field_width, 0), (self.world.field.field_width, self.world.field.field_length),(0, self.world.field.field_length)], False)
-            # field.set_color(0, 0, 0)
-            # self.viewers[i].add_geom(field)
-
-            # # The depot
-            # acircle = rendering.make_circle(10,30)
-            # trans = rendering.Transform(translation=self.world.field.depot)
-            # acircle.set_color(0, 0, 0)
-            # acircle.add_attr(trans)
-            # self.viewers[i].add_geom(acircle)
-
-            # # The harvesting area
-            # harv_area = rendering.make_polygon([(0, self.world.field.headland_width), (0, self.world.field.field_length - self.world.field.headland_width), (self.world.field.field_width, self.world.field.field_length - self.world.field.headland_width), (self.world.field.field_width, self.world.field.headland_width)], True)
-            # harv_area.set_color(0.941, 1, 0.941)
-            # self.viewers[i].add_geom(harv_area)
-
-            # # The harvesters' trajectory
-            # for harv in self.world.harvesters:
-            #     # points = harv.nav_points
-            #     self.viewers[i].draw_polyline(harv.nav_points, color = harv.color)
-
-            # self.viewers[i].set_bounds(
-            #     pos[0]-cam_range, pos[0]+cam_range, pos[1]-cam_range, pos[1]+cam_range)
-            # update geometry positions
-
             for e, entity in enumerate(self.world.harvesters + self.world.transporters):
                 self.render_geoms_xform[e].set_translation(*entity.pos * scale)
                 # self.render_geoms[e].set_color(*entity.color)
@@ -436,25 +423,18 @@ class IAMultiAgentEnv(gym.Env):
                 self.text_geoms[h + 1 + t].label.text = message
             message = f'Time :' + '%.1f'%(self.current_step * self.decision_dt) + 's'
             self.text_geoms[h + t + 2].label.text = message
+
             for h, harv in enumerate(self.world.harvesters):
                 self.render_geoms[e + h + 1].v = np.concatenate([harv.nav_points[:harv.nav], [harv.pos]], axis=0)*scale
 
-            for harv in self.world.harvesters:
-                # points = harv.nav_points
-                nav_points = np.array(harv.nav_points.copy())
-                nav_points = nav_points * scale
-                line = rendering.make_polyline([nav_points[:harv.nav], harv.pos*scale])
-                line.set_color(*harv.color)
-                line.set_linewidth(1 * scale)
-                self.render_geoms.append(line)
-            # # The cars 
-            # for entity in self.world.harvesters + self.world.transporters:
-            #     acircle = rendering.make_circle(5, 30)
-            #     # print(entity.pos)
-            #     trans = rendering.Transform(translation=entity.pos)
-            #     acircle.add_attr(trans)
-            #     acircle.set_color(entity.color[0], entity.color[1], entity.color[2])
-            #     self.viewers[i].add_geom(acircle)
+            # for harv in self.world.harvesters:
+            #     # points = harv.nav_points
+            #     nav_points = np.array(harv.nav_points.copy())
+            #     nav_points = nav_points * scale
+            #     line = rendering.make_polyline([nav_points[:harv.nav], harv.pos*scale])
+            #     line.set_color(*harv.color)
+            #     line.set_linewidth(1 * scale)
+            #     self.render_geoms.append(line)
             
             # render to display or array
             results.append(self.viewers[i].render(
