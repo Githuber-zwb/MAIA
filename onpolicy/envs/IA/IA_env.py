@@ -39,7 +39,7 @@ if __name__ == "__main__":
     from onpolicy.config import get_config
     from onpolicy.envs.IA.utils import test_graph
 
-    np.random.seed(7)
+    np.random.seed(8)
     parser = get_config()
     parser.add_argument('--scenario_name', type=str,
                         default='ia_simple', help="Which scenario to run on")
@@ -73,13 +73,15 @@ if __name__ == "__main__":
             if all_args.test_graph and i % 300 == 0:
                 test_graph(env.world.field.graph)
 
-            for h, harv in enumerate(env.world.harvesters):
-                print(h, harv.cur_working_line)
+            # for h, harv in enumerate(env.world.harvesters):
+            #     print(h, harv.load)
+            # for t, trans in enumerate(env.world.transporters):
+            #     print(t, trans.load)
 
             # auto trans mode
             actions = np.zeros([env.world.num_transporter, 1])
-            obs, rews,dones,infos = env.step(actions, auto_trans_mode=True, decPt=0.6)
-            # obs, rews,dones,infos = env.step(actions, no_trans_mode=True)
+            # obs, rews,dones,infos = env.step(actions, auto_trans_mode=True, decPt=0.6, show_graph=all_args.test_graph)
+            obs, rews,dones,infos = env.step(actions, no_trans_mode=True)
             rewards_total.append(rews)
             # print("Rewards: ", rews)
             # print("done: ", dones)
@@ -96,12 +98,12 @@ if __name__ == "__main__":
 
             img = env.render("rgb_array")[0]
             # image_list.append(img)
+            if i % 50 == 0 or np.all(dones):
+                imageio.imsave(f"figs/scenario1/single_{i}_{all_args.num_harvester}_{all_args.num_transporter}.jpg", img)
             if np.all(dones):
                 if all_args.test_graph:
                     test_graph(env)
                 break
-            # if i % 50 == 0:
-            #     imageio.imsave(f"figs/auto_trans_mode_time_{i}_{all_args.num_harvester}_{all_args.num_transporter}.jpg", img)
         rewards_total = np.sum(np.array(rewards_total), axis=0)
         print(rewards_total)
         reward_ls.append(np.mean(rewards_total))

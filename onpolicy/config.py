@@ -313,6 +313,7 @@ def get_config():
     parser.add_argument("--trans_vmax", type=float, default=8.0)
     parser.add_argument("--trans_capmin", type=int, default=70)
     parser.add_argument("--trans_capmax", type=int, default=100)
+    parser.add_argument("--trans_speed", type=int, default=80)
     
     # environment settings
     parser.add_argument('--dt', type=float, default=0.1, help="simulation interval")

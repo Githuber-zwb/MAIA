@@ -78,7 +78,7 @@ class IAMultiAgentEnv(gym.Env):
             np.random.seed(seed)
 
     # step  this is  env.step()
-    def step(self, action_n, img_list = None, no_trans_mode = False, auto_trans_mode = False, decPt = None):
+    def step(self, action_n, img_list = None, no_trans_mode = False, auto_trans_mode = False, decPt = None, show_graph = False):
         # set action for each agent
         # action_n:a list, contains num_agent elements,each element is a (single_action_dim,)shape array. 
         self.current_step += 1
@@ -96,6 +96,10 @@ class IAMultiAgentEnv(gym.Env):
             for i in range(self.world.num_transporter):
                 if self.world.transporters[i].load_percent == 1.0:
                     self.world.transporters[i].set_action(1)
+                    if show_graph and not self.world.transporters[i].has_dispatch_task:
+                        path = self.world.transporters[i].nav_points[:]
+                        test_graph(self.world.field.graph, path)
+
             for i in range(self.world.num_harvester):
                 if self.world.harvesters[i].load_percent >= decPt:
                     if not self.world.harvesters[i].chosen:
@@ -109,8 +113,9 @@ class IAMultiAgentEnv(gym.Env):
                         for k in idx:
                             if not self.world.transporters[k].has_dispatch_task:
                                 self.world.transporters[k].set_action(2, self.world.harvesters[i])
-                                path = self.world.transporters[k].nav_points[:-4]
-                                test_graph(self.world.field.graph, path)
+                                if show_graph:
+                                    path = self.world.transporters[k].nav_points[:-4]
+                                    test_graph(self.world.field.graph, path)
                                 break
         else:
             for i, agent in enumerate(self.world.transporters):
@@ -267,8 +272,8 @@ class IAMultiAgentEnv(gym.Env):
                 from . import rendering
                 # self.viewers[i] = rendering.Viewer(600, 800)
                 # self.viewers[i].set_bounds(-300, 300, -100, 700)
-                self.viewers[i] = rendering.Viewer((field_width + 150) * scale, (field_length + 40) * scale)
-                self.viewers[i].set_bounds(-20 * scale, (field_width + 130) * scale , -20 * scale, (field_length + 20) * scale)
+                self.viewers[i] = rendering.Viewer((field_width + 180) * scale, (field_length + 40) * scale)
+                self.viewers[i].set_bounds(-20 * scale, (field_width + 160) * scale , -20 * scale, (field_length + 20) * scale)
 
         # create rendering geometry
         if self.render_geoms is None:
@@ -372,31 +377,31 @@ class IAMultiAgentEnv(gym.Env):
             # The text
             self.text_geoms = []
             for h, harv in enumerate(self.world.harvesters):
-                label = pyglet.text.Label(f"Harvester {h}", font_size=10,
-                                x=(field_width + 20)*scale, y=(field_length-h*20/scale)*scale , anchor_x='left', anchor_y='bottom',
+                label = pyglet.text.Label(f"Harvester {h}", font_size=13,
+                                x=(field_width + 20)*scale, y=(field_length-30-h*25/scale)*scale , anchor_x='left', anchor_y='bottom',
                                 color=(0, 0, 0, 255))
                 label.draw()
                 self.text_geoms.append(DrawText(label))
                 acircle = rendering.make_circle(2 * scale, 30)
-                transl = rendering.Transform(translation=np.array([(field_width + 10)*scale, (field_length + 5 -h*20/scale)*scale]))
+                transl = rendering.Transform(translation=np.array([(field_width + 10)*scale, (field_length+5-30-h*25/scale)*scale]))
                 acircle.set_color(*harv.color)
                 acircle.add_attr(transl)
                 self.render_geoms.append(acircle)
             for t, trans in enumerate(self.world.transporters):
-                label = pyglet.text.Label(f"Transporter {t}", font_size=10,
-                                x=(field_width + 20)*scale, y=(field_length-(h+1)*20/scale-t*20/scale)*scale , anchor_x='left', anchor_y='bottom',
+                label = pyglet.text.Label(f"Transporter {t}", font_size=13,
+                                x=(field_width + 20)*scale, y=(field_length-30-(h+1)*25/scale-t*25/scale)*scale , anchor_x='left', anchor_y='bottom',
                                 color=(0, 0, 0, 255))
                 label.draw()
                 self.text_geoms.append(DrawText(label))
                 acircle = rendering.make_circle(4 * scale, 30)
-                transl = rendering.Transform(translation=np.array([(field_width + 10)*scale, (field_length + 5-(h+1)*20/scale-t*20/scale)*scale]))
+                transl = rendering.Transform(translation=np.array([(field_width + 10)*scale, (field_length-30+5-(h+1)*25/scale-t*25/scale)*scale]))
                 acircle.set_color(*trans.color)
                 acircle.add_attr(transl)
                 self.render_geoms.append(acircle)
             # add time 
             # print(self.current_step)
-            label = pyglet.text.Label("Time: ", font_size=10,
-                            x=(field_width + 10)*scale, y=(field_length-(h+1)*20/scale-(t+1)*20/scale)*scale , anchor_x='left', anchor_y='bottom',
+            label = pyglet.text.Label("Time: ", font_size=13,
+                            x=(field_width + 20)*scale, y=(field_length-30-(h+1)*25/scale-(t+1)*25/scale)*scale , anchor_x='left', anchor_y='bottom',
                             color=(0, 0, 0, 255))
             label.draw()
             self.text_geoms.append(DrawText(label))

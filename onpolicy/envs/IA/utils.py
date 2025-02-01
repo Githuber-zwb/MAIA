@@ -84,6 +84,26 @@ def find_target_index(arr, target):
     
     return None  # Return None if no match is found
 
+def find_target(arr, target):
+    dim = len(arr.shape)
+    if dim == 3:
+        # Iterate through each index in the m*n plane
+        for i in range(arr.shape[0]):  # m (first dimension)
+            for j in range(arr.shape[1]):  # n (second dimension)
+                # Extract the 2D slice from the 3D array (shape: (2,))
+                slice_2d = arr[i, j]
+                
+                # Check if the slice matches the target
+                if np.array_equal(slice_2d, target):
+                    return True  # Return the (i, j) index if match is found
+    elif dim == 2:
+        for i in range(arr.shape[0]):
+            slice_2d = arr[i]
+            if np.array_equal(slice_2d, target):
+                return True  # Return the (i, j) index if match is found
+    
+    return False  # Return None if no match is found
+
 def test_graph(graph, path = None):
     fig, ax = plt.subplots()
 

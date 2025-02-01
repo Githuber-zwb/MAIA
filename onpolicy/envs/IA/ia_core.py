@@ -4,7 +4,7 @@ import seaborn as sns
 from numpy import random
 import copy
 from collections import defaultdict
-from onpolicy.envs.IA.utils import compute_dist, pnpoly, a_star, heuristic, find_target_index
+from onpolicy.envs.IA.utils import compute_dist, pnpoly, a_star, heuristic, find_target_index, test_graph, find_target
 
 # 定义农田类
 class Field(object):
@@ -680,10 +680,25 @@ class Transporter_New(object):
         assert len(self.nav_points) == 2, "Before search the vehicle should have two nav points!"
         g = copy.deepcopy(self.field.graph)
         g[tuple(self.pos.copy())].append(tuple(self.nav_points[0].copy()))
+        g[tuple(self.nav_points[0].copy())].append(tuple(self.pos.copy()))
+        if not (find_target(self.nav_points[0].copy(), self.field.nav_points) or \
+                find_target(self.nav_points[0].copy(), self.field.vertices_nav_point)):
+            # print("CONNECT")
+            g[tuple(self.pos.copy())].append(tuple(self.nav_points[1].copy()))
+            g[tuple(self.nav_points[1].copy())].append(tuple(self.pos.copy()))
         if tuple(self.nav_points[1].copy()) in g[tuple(self.nav_points[0].copy())]:
             g[tuple(self.pos.copy())].append(tuple(self.nav_points[1].copy()))
+            g[tuple(self.nav_points[1].copy())].append(tuple(self.pos.copy()))
         # print("SEARCH: ", self.pos, target)
         path, _ = a_star(g, tuple(self.pos.copy()), tuple(target.copy()), heuristic)
+        # if path == None:
+        #     print(self.field.nav_points)
+        #     print(self.field.vertices_nav_point)
+        #     print(self.nav_points[0])
+        #     print(self.nav_points[0] in self.field.nav_points or self.nav_points[0] in self.field.vertices_nav_point)
+        #     test_graph(self.field.graph, [self.pos,target])
+        #     print(self.nav_points)
+        #     print(self.pos, self.field.depot, target)
         assert path != None, "Cannot find path!"
         return np.array(path)
 
@@ -729,7 +744,6 @@ class Transporter_New(object):
             self.add_nav_point(harv.nav_points[harv.nav + 4])
         
         self.reset_nav_and_dir()
-        return
     
     def in_head_lines(self):
         p1 = self.field.vertices[0] + np.array([0, self.field.headland_width / 2])
@@ -775,7 +789,7 @@ class Transporter_New(object):
             self.pos = pred_new_pos
             # 判断是否找到收割机
             if np.linalg.norm(self.pos - self.serving_harv.pos) < self.pos_error:
-                self.nav_points = np.array([self.old_nav_point, self.curr_nav_point])
+                self.nav_points = [self.old_nav_point, self.curr_nav_point]
                 self.searching_for_harv = False
                 self.transporting = True
                 # self.assign_return_head_nav_points()
@@ -875,11 +889,11 @@ class World(object):
 
         self.harv_field_dict = {
             2: (120, 300), 
-            3: (150, 400), 
-            4: (180, 450), 
-            5: (200, 500), 
-            6: (250, 550), 
-            7: (300, 650)
+            3: (150, 350), 
+            4: (180, 400), 
+            5: (200, 420), 
+            6: (250, 450), 
+            7: (300, 500)
         }
 
         self.dt = args.dt
@@ -892,6 +906,7 @@ class World(object):
 
         self.episode_length = args.episode_length
         self.shared_reward = args.shared_reward
+        self.trans_speed = args.trans_speed
 
         self.harv_vmin = args.harv_vmin
         self.harv_vmax = args.harv_vmax
@@ -923,10 +938,10 @@ class World(object):
 
         self.harvesters = [Harvester(field=self.field, speed=np.random.uniform(self.harv_vmin, self.harv_vmax), \
                                      capacity=int(np.random.uniform(self.harv_capmin, self.harv_capmmax)) * 100, \
-                                     dt = self.dt) for _ in range(self.num_harvester)]
+                                     transporting_speed=self.trans_speed, dt = self.dt) for _ in range(self.num_harvester)]
         self.transporters = [Transporter_New(field=self.field, speed=np.random.uniform(self.trans_vmin, self.trans_vmax), \
                                          capacity=int(np.random.uniform(self.trans_capmin, self.trans_capmax)) * 100, \
-                                         dt = self.dt) for _ in range(self.num_transporter)]
+                                         transporting_speed=self.trans_speed, dt = self.dt) for _ in range(self.num_transporter)]
         for i, harv in enumerate(self.harvesters):
             harv.id = i
             harv.name = 'harvester %d' % i
