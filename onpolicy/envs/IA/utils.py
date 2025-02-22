@@ -11,6 +11,14 @@ def compute_dist(a, b):
     assert a.shape == b.shape
     return np.sqrt(np.sum((a - b) ** 2))
 
+def manhattan_distance(a, b, f = 1.05):
+    if isinstance(a, tuple):
+        a = np.array(a)
+    if isinstance(b, tuple):
+        b = np.array(b)
+    assert a.shape == b.shape
+    return f * np.sum(np.abs(a-b))
+
 # 判断点是否在多边形内，不包括在边上
 def pnpoly(vertices, testp):
     n = len(vertices)
@@ -69,7 +77,8 @@ def a_star(graph, start, target, heuristic):
 
 # Example heuristic: Euclidean distance for grid-based paths
 def heuristic(node, target):
-    return compute_dist(node, target)
+    # return compute_dist(node, target)
+    return manhattan_distance(node, target)
 
 def find_target_index(arr, target):
     # Iterate through each index in the m*n plane
@@ -104,7 +113,8 @@ def find_target(arr, target):
     
     return False  # Return None if no match is found
 
-def test_graph(graph, path = None):
+def test_graph(graph, path = None, time = 0):
+    # print("TEST")
     fig, ax = plt.subplots()
 
     # Set the axis labels
@@ -114,7 +124,7 @@ def test_graph(graph, path = None):
     # Plot nodes as scatter points
     for node in graph:
         x, y = node  # Unpack the coordinates of the node
-        ax.scatter(x, y, c='blue', s=1, zorder=5)  # Plot the node (blue point)
+        # ax.scatter(x, y, c='blue', s=1, zorder=5)  # Plot the node (blue point)
 
     # Plot edges as lines between connected nodes
     for node, neighbors in graph.items():
@@ -128,12 +138,22 @@ def test_graph(graph, path = None):
 
     if path != None:
         for i in range(len(path) - 1):
-            ax.scatter(path[i][0], path[i][1], c='yellow', s=1, zorder=5)  # Plot the node
-            ax.plot([path[i][0], path[i + 1][0]] , [path[i][1], path[i + 1][1]], c='red', linestyle='-', linewidth=1, zorder=1)  # Plot edge (line)
-        ax.scatter(path[0][0], path[0][1], c='black', s=1, zorder=5)  # Plot the node
-        ax.scatter(path[-1][0], path[-1][1], c='purple', s=1, zorder=5)  # Plot the node
+            # ax.scatter(path[i][0], path[i][1], c='yellow', s=5, zorder=5)  # Plot the node
+            ax.plot([path[i][0], path[i + 1][0]] , [path[i][1], path[i + 1][1]], c='red', linestyle='-', linewidth=2, zorder=1)  # Plot edge (line)
+        ax.scatter(path[0][0], path[0][1], c='yellow', s=20, zorder=5)  # Plot the node
+        ax.scatter(path[-1][0], path[-1][1], c='green', s=20, zorder=5)  # Plot the node
 
     # Display the plot
+    plt.title('动态连通图可视化')
+    plt.savefig('/home/wenbo/Documents/MAIA/figs/nav_test/graph_' + str(time) + '.png')
     plt.show()
     # plt.pause(5) # 显示1s
     # plt.close()
+
+def compute_path_len(path: np.array):
+    assert path.shape[1] == 2
+    length = 0
+    for n in range(1, path.shape[0]):
+        # length += np.sqrt(np.sum((harv.nav_points[n] - harv.nav_points[n - 1]) ** 2))
+        length += compute_dist(path[n], path[n - 1])
+    return length

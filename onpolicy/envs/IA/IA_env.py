@@ -3,7 +3,6 @@ from onpolicy.envs.IA.scenarios import load
 from onpolicy.envs.IA.scenarios.ia_simple import Scenario
 import imageio
 from matplotlib import pyplot as plt
-from onpolicy.envs.IA.ia_core import a_star, heuristic
 import numpy as np
 
 def IAEnv(args):
@@ -36,10 +35,10 @@ def IAEnv(args):
 if __name__ == "__main__":
     import argparse
     import time
+    import random
     from onpolicy.config import get_config
     from onpolicy.envs.IA.utils import test_graph
 
-    np.random.seed(8)
     parser = get_config()
     parser.add_argument('--scenario_name', type=str,
                         default='ia_simple', help="Which scenario to run on")
@@ -50,42 +49,45 @@ if __name__ == "__main__":
                         default=False)
 
     all_args = parser.parse_known_args()[0]
+    np.random.seed(4)
+    random.seed(0)
     env = IAEnv(all_args)
 
-    # env.world.harvesters[0].speed = 1.8
-    # env.world.harvesters[0].capacity = 1600
-    # env.world.harvesters[1].speed = 1.6
-    # env.world.harvesters[1].capacity = 2000
+    # img = env.render("rgb_array")[0]
+    # imageio.imsave(f"figs/single_{all_args.num_harvester}_{all_args.num_transporter}.jpg", img)
 
-    image_list = []
     reward_ls = []
-    for episode in range(1):
+    dist_ls = []
+    wait_ls = []
+    trans_num_ls = []
+    for episode in range(50):
+        image_list = []
+        print("Episode: ", episode)
         env.reset()
+
         for i in range(len(env.world.harvesters)):
             print(f"Harv {i} speed and cap: ", env.world.harvesters[i].speed, env.world.harvesters[i].capacity)
-            print(f"harv {i} state: ", env.world.harvesters[i].get_state())
+            # print(f"harv {i} state: ", env.world.harvesters[i].get_state())
         for i in range(len(env.world.transporters)):
             print(f"Trans {i} speed and cap: ", env.world.transporters[i].speed, env.world.transporters[i].capacity)
             
         rewards_total = []
         for i in range(all_args.episode_length):
-            print(i)
-            if all_args.test_graph and i % 300 == 0:
-                test_graph(env.world.field.graph)
-
-            # for h, harv in enumerate(env.world.harvesters):
-            #     print(h, harv.load)
-            # for t, trans in enumerate(env.world.transporters):
-            #     print(t, trans.load)
+            # print(i)
+            if all_args.test_graph and i % 100 == 0:
+                test_graph(env.world.field.graph, time=i)
+         
+            # img = env.render("rgb_array")[0]
+            # image_list.append(img)
+            # if i % 100 == 0:
+                # imageio.imsave(f"/home/wenbo/Documents/MAIA/figs/graph_test/field_{i}.jpg", img)
 
             # auto trans mode
             actions = np.zeros([env.world.num_transporter, 1])
-            # obs, rews,dones,infos = env.step(actions, auto_trans_mode=True, decPt=0.6, show_graph=all_args.test_graph)
-            obs, rews,dones,infos = env.step(actions, no_trans_mode=True)
+            # obs, rews,dones,infos = env.step(actions, auto_trans_mode=True, decPt=0.8, show_graph=True, time = i)
+            obs, rews,dones,infos = env.step(actions, auto_trans_mode=True, decPt=0.5, transDP=1.0)
+            # obs, rews,dones,infos = env.step(actions, no_trans_mode=True)
             rewards_total.append(rews)
-            # print("Rewards: ", rews)
-            # print("done: ", dones)
-            # print("step:", env.current_step, "\n")
 
             # # random policy
             # actions = np.random.randint(0, 5, size=env.world.num_transporter)
@@ -96,21 +98,37 @@ if __name__ == "__main__":
             # print("done: ", dones)
             # print(obs)
 
-            img = env.render("rgb_array")[0]
-            # image_list.append(img)
-            if i % 50 == 0 or np.all(dones):
-                imageio.imsave(f"figs/scenario1/single_{i}_{all_args.num_harvester}_{all_args.num_transporter}.jpg", img)
             if np.all(dones):
+                print(i)
                 if all_args.test_graph:
-                    test_graph(env)
+                    test_graph(env.world.field.graph, time=i)
+                # img = env.render("rgb_array")[0]
+                # image_list.append(img)
                 break
+
+        # imageio.mimsave('/home/wenbo/Documents/MAIA/figs/tmp.mp4', image_list)
+            
         rewards_total = np.sum(np.array(rewards_total), axis=0)
-        print(rewards_total)
         reward_ls.append(np.mean(rewards_total))
+        wait_tmp = []
+        dist_tmp = []
+        trans_num_tmp = []
         for h in range(all_args.num_harvester):
             print(f"Harvester{h} total wait time: ", env.world.harvesters[h].total_wait_time)
+            wait_tmp.append(env.world.harvesters[h].total_wait_time)
         for t in range(all_args.num_transporter):
             print(f"Transporter{t} total trip: ", env.world.transporters[t].total_trip)
             print(f"Transporter{t} total transport times: ", env.world.transporters[t].trans_times)
-    print(reward_ls, np.mean(reward_ls), np.std(reward_ls))
+            dist_tmp.append(env.world.transporters[t].total_trip)
+            trans_num_tmp.append(env.world.transporters[t].trans_times)
+        wait_ls.append(np.mean(wait_tmp))
+        dist_ls.append(np.mean(dist_tmp))
+        trans_num_ls.append(np.mean(trans_num_tmp))
+        print("*"*10)
+        
+    # print(reward_ls, np.mean(reward_ls), np.std(reward_ls))
+    print("mean wait time: ", np.mean(wait_ls))
+    print("mean trans distance: ", np.mean(dist_ls))
+    print("mean trans times: ", np.mean(trans_num_ls))
+    print("reuslt: ", '%.2f' % np.mean(wait_ls), " & ", '%.2f' % np.mean(dist_ls)," & ", '%.2f' % np.mean(trans_num_ls))
     # imageio.mimsave('render/env_auto_trans_mode_100_per_3_2.mp4', image_list)

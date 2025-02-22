@@ -2,7 +2,7 @@ import numpy as np
 from numpy import random
 from onpolicy.envs.IA.ia_core import World, Harvester, Transporter, FieldIr
 from onpolicy.envs.IA.scenario import BaseScenario
-from onpolicy.envs.IA.GA.ga_algorithm import ga
+from onpolicy.envs.IA.GA.ga_algorithm import GA, compute_dist
 
 class Scenario(BaseScenario):
     def make_world(self, args):
@@ -14,13 +14,29 @@ class Scenario(BaseScenario):
         world.reset()
         if use_ga_dispatch:
             # print("USE GA")
-            newarr = ga(world)
+            # ga = GA(world)
+            ga = GA(world, target="length")
+            newarr,_ = ga.solve(True, '/home/wenbo/Documents/MAIA/figs/results/ga_full_')
         else:
             arr = np.array(range(world.field.num_working_lines))
             random.shuffle(arr)
             newarr = np.array_split(arr, world.num_harvester)
         for i, harv in enumerate(world.harvesters):
             harv.dispatch_tasks(newarr[i])
+
+        # harvesters_len = []
+        # harvesters_time = []
+        # for h, harv in enumerate(world.harvesters):
+
+        #     length = 0
+        #     for n in range(1, harv.nav_points.shape[0]):
+        #         # length += np.sqrt(np.sum((harv.nav_points[n] - harv.nav_points[n - 1]) ** 2))
+        #         length += compute_dist(harv.nav_points[n], harv.nav_points[n - 1])
+            # harvesters_len.append(length)
+            # harvesters_time.append(length / harv.speed)
+        # print(harvesters_len)
+        # print(harvesters_len)
+        # print(harvesters_time)
 
     def reward(self, trans: Transporter, world: World):
         # transporters reward

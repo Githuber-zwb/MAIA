@@ -1,3 +1,5 @@
+import random
+import numpy as np
 # import ipaddress
 
 # class Iptables:
@@ -310,10 +312,90 @@ def euclidean_distance(a, b):
 def heuristic(node, target):
     return euclidean_distance(node, target)
 
+def group_crossover(parent1: np.array, parent2: np.array, n, m):
+    parent1_groups = []
+    parent2_groups = []
+    break_points1 = np.where(parent1 == -1)[0]
+    working_lines1 = np.split(parent1, break_points1)
+    for i, wl in enumerate(working_lines1):
+        parent1_groups.append(wl[:] if i == 0 else wl[1:])
+    break_points2 = np.where(parent2 == -1)[0]
+    working_lines2 = np.split(parent2, break_points2)
+    for i, wl in enumerate(working_lines2):
+        parent2_groups.append(wl[:] if i == 0 else wl[1:])
+
+    # 生成随机排列
+    crossover_order = random.sample(range(m), m)
+
+    child_groups = []
+    used_tasks = set()
+
+    # 交叉
+    for i, k in enumerate(crossover_order):
+        if random.random() < 0.5:
+            selected_group = parent1_groups[k].copy()
+        else:
+            selected_group = parent2_groups[k].copy()
+        # 去重
+        tmp = []
+        for num in selected_group:
+            if num not in used_tasks:
+                tmp.append(num)
+            used_tasks.add(num)
+        if i != m - 1:
+            tmp.append(-1)
+        if len(tmp) != 0:
+            child_groups.append(tmp)
+    child_groups = np.concatenate(child_groups, dtype=int)
+    
+    # 将未选择的节点插入子代
+    for num in range(n):
+        if num not in used_tasks:
+            child_groups = np.insert(child_groups, np.random.randint(child_groups.shape[0] + 1), num)
+
+    return child_groups
+
+def in_group_exchange(chrom, m):
+    child_groups = []
+    break_points = np.where(chrom == -1)[0]
+    working_lines = np.split(chrom, break_points)
+    for i, wl in enumerate(working_lines):
+        child_groups.append(wl[:] if i == 0 else wl[1:])
+    a, b = random.sample(range(len(child_groups)), 2)
+    if child_groups[a].shape[0] == 0 or child_groups[b].shape[0] == 0:
+        return chrom
+    id1 = np.random.randint(child_groups[a].shape[0])
+    id2 = np.random.randint(child_groups[b].shape[0])
+    print(a,b,id1,id2)
+    child_groups[a][id1], child_groups[b][id2] = child_groups[b][id2], child_groups[a][id1] 
+    for i, c in enumerate(child_groups[:-1]):
+        child_groups[i] = np.append(c,-1)
+    chrom = np.concatenate(child_groups, dtype=int)
+    return chrom
+
+def two_opt(chrom):
+    child_groups = []
+    break_points = np.where(chrom == -1)[0]
+    working_lines = np.split(chrom, break_points)
+    for i, wl in enumerate(working_lines):
+        child_groups.append(wl[:] if i == 0 else wl[1:])
+    a = np.random.randint(len(child_groups))
+    if child_groups[a].shape[0] < 1:
+        return chrom
+    id1, id2 = random.sample(range(child_groups[a].shape[0] + 1), 2)
+    if id1 > id2:
+        id1, id2 = id2, id1
+    print(a,id1,id2)
+    child_groups[a][id1:id2] = child_groups[a][id1:id2][::-1]
+    for i, c in enumerate(child_groups[:-1]):
+        child_groups[i] = np.append(c,-1)
+    chrom = np.concatenate(child_groups, dtype=int)
+    return chrom
 
 if __name__ == "__main__":
     # print(solve())
     import numpy as np
+    import math
 
     # a = np.array([-1,-1,1,2,3,1,4,5,6])
     # b = np.where(a==-1)[0]
@@ -341,25 +423,25 @@ if __name__ == "__main__":
 
 
     # Example graph (undirected)
-    graph = collections.defaultdict(list)
+    # graph = collections.defaultdict(list)
 
-    # Add edges (undirected graph)
-    graph[(0, 0)].append((1, 1))
-    graph[(0, 0)].append((1, 0))
-    graph[(1, 0)].append((0, 0))
-    graph[(1, 0)].append((2, 1))
-    graph[(1, 1)].append((0, 0))
-    graph[(1, 1)].append((2, 1))
-    graph[(2, 1)].append((1, 0))
-    graph[(2, 1)].append((1, 1))
+    # # Add edges (undirected graph)
+    # graph[(0, 0)].append((1, 1))
+    # graph[(0, 0)].append((1, 0))
+    # graph[(1, 0)].append((0, 0))
+    # graph[(1, 0)].append((2, 1))
+    # graph[(1, 1)].append((0, 0))
+    # graph[(1, 1)].append((2, 1))
+    # graph[(2, 1)].append((1, 0))
+    # graph[(2, 1)].append((1, 1))
 
-    # Test A* algorithm
-    start = (0, 0)
-    target = (2, 1)
-    path, cost = a_star(graph, start, target, heuristic)
+    # # Test A* algorithm
+    # start = (0, 0)
+    # target = (2, 1)
+    # path, cost = a_star(graph, start, target, heuristic)
 
-    print(f"Path: {path}")
-    print(f"Total cost: {cost}")
+    # print(f"Path: {path}")
+    # print(f"Total cost: {cost}")
 
     # # Example graph where nodes are represented by coordinates (tuples)
     # graph = collections.defaultdict(list)
@@ -371,3 +453,20 @@ if __name__ == "__main__":
 
     # # Visualize the graph
     # plot_graph(graph)
+    
+    # Example usage
+    # n = 10  # Number of cities
+    # m = 3   # Number of salesmen
+    # parent1 = np.array([0, 1, 2, -1, 3, 4, 5, 6, -1, 7, 8, 9, 10, 11, 12])
+    # parent2 = np.array([3, 4, 5, -1, 0, 1, 2, -1, 6, 7, 8, 9])
+
+    # # child = group_crossover(parent1, parent2, n, m)
+    # # print("Child Chromosome:", child)
+
+    # chrom = two_opt(parent1)
+    # print(chrom)
+
+    # arr = np.random.uniform(190, 250, 1000)
+    # for i, num in enumerate(arr):
+    #     arr[i] = math.ceil(num/3)
+    # print(np.mean(arr))

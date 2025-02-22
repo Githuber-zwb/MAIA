@@ -5,7 +5,7 @@ import numpy as np
 from .multi_discrete import MultiDiscrete
 from onpolicy.envs.IA.ia_core import World, Harvester, Transporter, Field
 import pyglet
-from onpolicy.envs.IA.utils import test_graph
+from onpolicy.envs.IA.utils import test_graph, compute_path_len
 # import os
 # os.environ['DISPLAY'] = ':1'
 
@@ -78,14 +78,14 @@ class IAMultiAgentEnv(gym.Env):
             np.random.seed(seed)
 
     # step  this is  env.step()
-    def step(self, action_n, img_list = None, no_trans_mode = False, auto_trans_mode = False, decPt = None, show_graph = False):
+    def step(self, action_n, no_trans_mode = False, auto_trans_mode = False, decPt = None, show_graph = False, time = 0, transDP=1.0):
         # set action for each agent
         # action_n:a list, contains num_agent elements,each element is a (single_action_dim,)shape array. 
         self.current_step += 1
 
         if no_trans_mode:
             for i in range(self.world.num_harvester):
-                if self.world.harvesters[i].load_percent == 1.0:
+                if self.world.harvesters[i].load_percent >= transDP:
                     print(f"harv{i} full at ", self.current_step * self.world.dt, " s. ")
                     print(f"harv{i} pos: ", self.world.harvesters[i].pos)
                     print("*"*10)
@@ -94,19 +94,21 @@ class IAMultiAgentEnv(gym.Env):
         elif auto_trans_mode:
             assert decPt != None, "Decision Point must be provided!"
             for i in range(self.world.num_transporter):
-                if self.world.transporters[i].load_percent == 1.0:
+                if self.world.transporters[i].load_percent >= transDP:
                     self.world.transporters[i].set_action(1)
                     if show_graph and not self.world.transporters[i].has_dispatch_task:
                         path = self.world.transporters[i].nav_points[:]
-                        test_graph(self.world.field.graph, path)
+                        test_graph(self.world.field.graph, path, time)
 
-            for i in range(self.world.num_harvester):
-                if self.world.harvesters[i].load_percent >= decPt:
-                    if not self.world.harvesters[i].chosen:
-                        pos_harv = self.world.harvesters[i].pos
+            for i, harv in enumerate(self.world.harvesters):
+                if harv.load_percent >= decPt:
+                    if not harv.chosen:
+                        # pos_harv = self.world.harvesters[i].pos
                         dis_list = []
-                        for j in range(self.world.num_transporter):
-                            dis_list.append(np.linalg.norm(pos_harv - self.world.transporters[j].pos))
+                        for j, trans in enumerate(self.world.transporters):
+                            # dis_list.append(np.linalg.norm(pos_harv - self.world.transporters[j].pos))
+                            path = trans.search_path(harv.old_nav_point.copy())
+                            dis_list.append(compute_path_len(path.copy()))
                         # print(dis_list)
                         idx = np.argsort(dis_list)
                         # print(idx)
@@ -115,7 +117,7 @@ class IAMultiAgentEnv(gym.Env):
                                 self.world.transporters[k].set_action(2, self.world.harvesters[i])
                                 if show_graph:
                                     path = self.world.transporters[k].nav_points[:-4]
-                                    test_graph(self.world.field.graph, path)
+                                    test_graph(self.world.field.graph, path, time)
                                 break
         else:
             for i, agent in enumerate(self.world.transporters):

@@ -267,6 +267,9 @@ class Harvester(object):
 
         if self.complete_traj:
             self.able_to_trans = False
+            # 将收割机的粮仓清空，防止其它运粮车来卸粮
+            self.load = 0.0
+            self.load_percent = 0.0
             return
 
         if self.time - self.last_trans_time < 60:   # 两次转运的间隔大于60s
@@ -677,10 +680,12 @@ class Transporter_New(object):
         return pnpoly(self.field.vertices_nav_point, self.pos)
 
     def search_path(self, target):
-        assert len(self.nav_points) == 2, "Before search the vehicle should have two nav points!"
+        # assert len(self.nav_points) == 2, "Before search the vehicle should have two nav points!"
         g = copy.deepcopy(self.field.graph)
-        g[tuple(self.pos.copy())].append(tuple(self.nav_points[0].copy()))
-        g[tuple(self.nav_points[0].copy())].append(tuple(self.pos.copy()))
+        if tuple(self.nav_points[0].copy()) not in g[tuple(self.pos.copy())]:
+            g[tuple(self.pos.copy())].append(tuple(self.nav_points[0].copy()))
+        if tuple(self.pos.copy()) not in g[tuple(self.nav_points[0].copy())]:
+            g[tuple(self.nav_points[0].copy())].append(tuple(self.pos.copy()))
         if not (find_target(self.nav_points[0].copy(), self.field.nav_points) or \
                 find_target(self.nav_points[0].copy(), self.field.vertices_nav_point)):
             # print("CONNECT")
@@ -724,7 +729,8 @@ class Transporter_New(object):
             # print("Current harvester has just started or has completed task.")
             self.searching_for_harv = False
             self.serving_harv = None
-            harv.chosen = False
+            # harv.chosen = False
+            # print("CANNOT assign")
             return
         self.searching_for_harv = True
         self.serving_harv = harv
@@ -825,6 +831,7 @@ class Transporter_New(object):
                     self.nav_points = self.nav_points[-2:]
                     self.returning_to_depot = False
                     self.unloading = True
+                    self.trans_times += 1
                     return
                 self.curr_nav_point = self.nav_points[self.nav]
                 self.old_nav_point = self.nav_points[self.nav - 1]

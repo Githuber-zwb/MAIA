@@ -311,8 +311,8 @@ def get_config():
     parser.add_argument("--harv_capmax", type=int, default=20)
     parser.add_argument("--trans_vmin", type=float, default=5.0)
     parser.add_argument("--trans_vmax", type=float, default=8.0)
-    parser.add_argument("--trans_capmin", type=int, default=70)
-    parser.add_argument("--trans_capmax", type=int, default=100)
+    parser.add_argument("--trans_capmin", type=int, default=40)
+    parser.add_argument("--trans_capmax", type=int, default=70)
     parser.add_argument("--trans_speed", type=int, default=80)
     
     # environment settings
