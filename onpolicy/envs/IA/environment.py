@@ -78,19 +78,21 @@ class IAMultiAgentEnv(gym.Env):
             np.random.seed(seed)
 
     # step  this is  env.step()
-    def step(self, action_n, no_trans_mode = False, auto_trans_mode = False, decPt = None, show_graph = False, time = 0, transDP=1.0):
+    def step(self, action_n, no_trans_mode = False, auto_trans_mode = False, static_sche_mode = False, \
+              decPt = None, show_graph = False, time = 0, transDP=1.0, demand_harvs = [], decode_results = None):
         # set action for each agent
         # action_n:a list, contains num_agent elements,each element is a (single_action_dim,)shape array. 
         self.current_step += 1
 
         if no_trans_mode:
             for i in range(self.world.num_harvester):
-                if self.world.harvesters[i].load_percent >= transDP:
-                    print(f"harv{i} full at ", self.current_step * self.world.dt, " s. ")
-                    print(f"harv{i} pos: ", self.world.harvesters[i].pos)
-                    print("*"*10)
+                if self.world.harvesters[i].load_percent >= decPt:
+                    # print(f"harv{i} full at ", self.current_step * self.world.decision_dt, " s. ")
+                    # print(f"harv{i} pos: ", self.world.harvesters[i].pos)
+                    # print("*"*10)
                     self.world.harvesters[i].load = 0.0
                     self.world.harvesters[i].load_percent = 0.0
+                    demand_harvs.append(i)
         elif auto_trans_mode:
             assert decPt != None, "Decision Point must be provided!"
             for i in range(self.world.num_transporter):
@@ -119,6 +121,19 @@ class IAMultiAgentEnv(gym.Env):
                                     path = self.world.transporters[k].nav_points[:-4]
                                     test_graph(self.world.field.graph, path, time)
                                 break
+        elif static_sche_mode:
+            assert decode_results != None
+            time = self.current_step * self.decision_dt
+            ## test
+            # if time > 3255:
+            #     self.world.transporters[1].set_action(1)
+            for dp in decode_results:
+                if self.decision_dt/2 <= (time - dp[1]) < self.decision_dt*2:
+                # if 0 <= (time - dp[1]) < self.decision_dt*10:
+                    if dp[0] == -1:
+                        self.world.transporters[dp[2]].set_action(1)
+                    else:
+                        self.world.transporters[dp[2]].set_action(2, self.world.harvesters[dp[0]])
         else:
             for i, agent in enumerate(self.world.transporters):
                 self._set_action(action_n[i], agent)

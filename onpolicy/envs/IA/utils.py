@@ -113,7 +113,7 @@ def find_target(arr, target):
     
     return False  # Return None if no match is found
 
-def test_graph(graph, path = None, time = 0):
+def test_graph(graph, path = None, time = 0, save_fig = False, savedir = None,transID=0):
     # print("TEST")
     fig, ax = plt.subplots()
 
@@ -135,8 +135,10 @@ def test_graph(graph, path = None, time = 0):
 
     # Set the aspect of the plot to be equal to ensure the nodes are not distorted
     ax.set_aspect('equal', adjustable='box')
+    plt.xticks(rotation=90)
+    plt.yticks(rotation=90)
 
-    if path != None:
+    if path.any() != None:
         for i in range(len(path) - 1):
             # ax.scatter(path[i][0], path[i][1], c='yellow', s=5, zorder=5)  # Plot the node
             ax.plot([path[i][0], path[i + 1][0]] , [path[i][1], path[i + 1][1]], c='red', linestyle='-', linewidth=2, zorder=1)  # Plot edge (line)
@@ -145,8 +147,10 @@ def test_graph(graph, path = None, time = 0):
 
     # Display the plot
     plt.title('动态连通图可视化')
-    plt.savefig('/home/wenbo/Documents/MAIA/figs/nav_test/graph_' + str(time) + '.png')
-    plt.show()
+    if save_fig:
+        assert savedir != None
+        plt.savefig(savedir + str(int(time)) + '_' + str(transID) + '.png', dpi=600)
+    # plt.show()
     # plt.pause(5) # 显示1s
     # plt.close()
 

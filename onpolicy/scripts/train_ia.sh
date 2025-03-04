@@ -15,7 +15,7 @@ do
     --scenario_name ${scenario} --num_harvester ${num_harvester} --num_transporter ${num_transporter} --seed ${seed} \
     --n_rollout_threads 128 --use_wandb --episode_length 700 --num_env_steps 100000000 \
     --ppo_epoch 5 --use_wandb --hidden_size 1024 --layer_N 2 --entropy_coef 0.01 \
-    --wait_time_factor 5.0 --distance_factor 0.05 --decision_dt 10.0 --lr 6e-4 --critic_lr 8e-4  \
+    --wait_time_factor 5.0 --distance_factor 0.05 --trans_times_factor 10.0 --decision_dt 10.0 --lr 6e-4 --critic_lr 8e-4  \
     # --lr 5e-4 --critic_lr 5e-4 
     echo "training is done!"
 done

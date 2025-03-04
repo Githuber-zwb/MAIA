@@ -39,6 +39,9 @@ if __name__ == "__main__":
     from onpolicy.config import get_config
     from onpolicy.envs.IA.utils import test_graph
 
+    np.random.seed(3)
+    random.seed(1)
+
     parser = get_config()
     parser.add_argument('--scenario_name', type=str,
                         default='ia_simple', help="Which scenario to run on")
@@ -49,8 +52,7 @@ if __name__ == "__main__":
                         default=False)
 
     all_args = parser.parse_known_args()[0]
-    np.random.seed(4)
-    random.seed(0)
+
     env = IAEnv(all_args)
 
     # img = env.render("rgb_array")[0]
@@ -60,7 +62,7 @@ if __name__ == "__main__":
     dist_ls = []
     wait_ls = []
     trans_num_ls = []
-    for episode in range(50):
+    for episode in range(1):
         image_list = []
         print("Episode: ", episode)
         env.reset()
@@ -77,7 +79,7 @@ if __name__ == "__main__":
             if all_args.test_graph and i % 100 == 0:
                 test_graph(env.world.field.graph, time=i)
          
-            # img = env.render("rgb_array")[0]
+            img = env.render("rgb_array")[0]
             # image_list.append(img)
             # if i % 100 == 0:
                 # imageio.imsave(f"/home/wenbo/Documents/MAIA/figs/graph_test/field_{i}.jpg", img)
@@ -86,7 +88,7 @@ if __name__ == "__main__":
             actions = np.zeros([env.world.num_transporter, 1])
             # obs, rews,dones,infos = env.step(actions, auto_trans_mode=True, decPt=0.8, show_graph=True, time = i)
             obs, rews,dones,infos = env.step(actions, auto_trans_mode=True, decPt=0.5, transDP=1.0)
-            # obs, rews,dones,infos = env.step(actions, no_trans_mode=True)
+            # obs, rews,dones,infos = env.step(actions, no_trans_mode=True, decPt=0.8)
             rewards_total.append(rews)
 
             # # random policy

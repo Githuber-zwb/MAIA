@@ -207,6 +207,21 @@ class Harvester(object):
         d = np.array([0, self.field.headland_width / 2])
         return pnpoly(np.array([self.field.vertices_nav_point[0] + d, self.field.vertices_nav_point[1] - d, self.field.vertices_nav_point[2] - d, self.field.vertices_nav_point[3] + d]), self.pos)
 
+    def in_head_lines(self):
+        p1 = self.field.vertices[0] + np.array([0, self.field.headland_width / 2])
+        p2 = self.field.vertices[3] + np.array([0, self.field.headland_width / 2])
+        a1 = p1 - self.pos
+        a2 = p2 - self.pos
+        if np.cross(a1, a2) == 0:
+            return True
+        p3 = self.field.vertices[1] - np.array([0, self.field.headland_width / 2])
+        p4 = self.field.vertices[2] - np.array([0, self.field.headland_width / 2])
+        a3 = p3 - self.pos
+        a4 = p4 - self.pos
+        if np.cross(a3, a4) == 0:
+            return True
+        return False
+    
     def move(self):
         if self.complete_traj: 
             return
@@ -679,9 +694,11 @@ class Transporter_New(object):
     def in_harvest_field(self):
         return pnpoly(self.field.vertices_nav_point, self.pos)
 
-    def search_path(self, target):
+    def search_path(self, target, g = None):
         # assert len(self.nav_points) == 2, "Before search the vehicle should have two nav points!"
-        g = copy.deepcopy(self.field.graph)
+        if g == None:
+            g = copy.deepcopy(self.field.graph)
+        # 将当前运粮车位置和运粮车旧导航点相连
         if tuple(self.nav_points[0].copy()) not in g[tuple(self.pos.copy())]:
             g[tuple(self.pos.copy())].append(tuple(self.nav_points[0].copy()))
         if tuple(self.pos.copy()) not in g[tuple(self.nav_points[0].copy())]:
@@ -691,6 +708,7 @@ class Transporter_New(object):
             # print("CONNECT")
             g[tuple(self.pos.copy())].append(tuple(self.nav_points[1].copy()))
             g[tuple(self.nav_points[1].copy())].append(tuple(self.pos.copy()))
+        # 如果当前所在的作业行已经被收割，则将运粮车所在位置与目标导航点相连
         if tuple(self.nav_points[1].copy()) in g[tuple(self.nav_points[0].copy())]:
             g[tuple(self.pos.copy())].append(tuple(self.nav_points[1].copy()))
             g[tuple(self.nav_points[1].copy())].append(tuple(self.pos.copy()))
@@ -956,7 +974,54 @@ class World(object):
             trans.id = j + self.num_harvester
             trans.name = 'transporter %d' % j
         self.assign_agent_colors()
+
+    def recover(self):
+        self.field.create_dynamic_graph()
+        for h in self.harvesters:
+            h.pos = self.field.depot  # 所有收割机都初始化在粮仓位置
+            h.time = 0.0 # 记录当前时刻
+            h.last_trans_time = 0.0  # 记录上一次转运完成时间
+            h.total_wait_time = 0.0  # 记录总的等待时间
+            h.new_wait_time = 0.0    # 记录新增加的等待时间
+            h.load = 0.0 # 当前收割机的总负载
+            h.cur_working_line = -1  # 开始时的作业行标识为-1
+            h.load_percent = h.load / h.capacity
+            h.complete_traj = False
+            h.has_a_trans = False
+            h.able_to_trans = False
+            h.chosen = False
+
+            h.nav = 1    # curr nav point
+            h.old_nav_point = h.nav_points[h.nav - 1]
+            h.curr_nav_point = h.nav_points[h.nav]
+            h.dir = (h.curr_nav_point - h.old_nav_point) / np.linalg.norm(h.curr_nav_point - h.old_nav_point)
         
+        for tr in self.transporters:
+            tr.total_trip = 0.0   #总行驶路程，单位m
+            tr.trans_times = 0   #总转运次数
+            tr.pos = tr.field.depot # 运粮车初始位置在粮仓
+            tr.nav_points = [self.field.depot, self.field.depot_nav_point]
+            tr.dir = (self.field.depot_nav_point - self.field.depot) / np.linalg.norm(self.field.depot_nav_point - self.field.depot)
+            tr.load = 0.0
+            tr.load_percent = tr.load / tr.capacity
+            tr.has_dispatch_task = False  # 当前是否有调运任务。调运任务包括返回机库卸粮和前往指定收割机转运
+            # 返回机库卸载粮食
+            tr.returning_to_depot = False # 当前是否在返回机库
+            tr.unloading = False  # 当前是否在机库卸粮
+            # 前往指定收割机分成三个阶段：寻找收割机，转运，回到地头
+            tr.searching_for_harv = False
+            tr.transporting = False
+            tr.returning_to_headland = False
+            tr.serving_harv = None
+
+            tr.new_trip_len = 0.0
+            tr.new_trans_times = 0
+
+            tr.nav = 1    # curr nav point
+            tr.old_nav_point = tr.nav_points[tr.nav - 1]
+            tr.curr_nav_point = tr.nav_points[tr.nav]
+            tr.dir = (tr.curr_nav_point - tr.old_nav_point) / np.linalg.norm(tr.curr_nav_point - tr.old_nav_point)
+
     def assign_agent_colors(self, color_mode="random"):
         if color_mode == "fixed":
             harv_colors = [(0.25, 0.75, 0.25)] * self.num_harvester
